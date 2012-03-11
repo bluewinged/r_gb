@@ -50,24 +50,34 @@ public class CPU implements Component {
 	int sp;
 
 	// interrupt specific
+	public static final int IR_VBLANK = 0x40;
+	public static final int IR_LCD = 0x48;
+	public static final int IR_TIMER = 0x50;
+	public static final int IR_JOY = 0x60;
+
 	private int delayIE;
 	private boolean interruptMaster;
-
+	private boolean halt;
 	private MemoryManager mem;
 
 	private Instr[] nInstr;// normal
 	private Instr[] eInstr;// extended
+
+	private int consumedCycles;
 
 	public CPU() {
 		generateInstructions();
 	}
 
 	public void tick() {
-		int opcode = mem.readByte(pc++)&0xff;
-		if(opcode ==0xCB){
-			eInstr[mem.readByte(pc++)&0xff].compile();
-		}else{
-			nInstr[opcode].compile();
+		if (!halt) {
+			int opcode = mem.readByte(pc++) & 0xff;
+
+			if (opcode == 0xCB) {
+				eInstr[mem.readByte(pc++) & 0xff].compile();
+			} else {
+				nInstr[opcode].compile();
+			}
 		}
 		checkInterrupts();
 	}
@@ -243,9 +253,15 @@ public class CPU implements Component {
 			return new Instr(cpu, "LDHL") {
 				@Override
 				void compile() {
-					// TODO: set flags
+
 					byte n = mem.readByte(pc++);
 					wr16reg(RG_HL, sp + n);
+
+					regs[RG_F] = 0;
+					if ((sp + n) > 0xffff)
+						regs[RG_F] |= C;
+					if ((sp ^ (n & 0xff) ^ ((sp + n) & 0xffff)) > 0)
+						regs[RG_F] |= H;
 				}
 			};
 		}
@@ -611,7 +627,8 @@ public class CPU implements Component {
 			return new Instr(cpu, "HALT") {
 				@Override
 				void compile() {
-					// TODO: do the halt stuff til interrupt occurs
+					interruptMaster = true;
+					halt = true;
 				}
 			};
 		}
@@ -860,7 +877,6 @@ public class CPU implements Component {
 					regs[RG_F] |= H;
 					if ((n >> bit & 1) == 0)
 						regs[RG_F] |= Z;
-
 				}
 			};
 		}
@@ -1035,8 +1051,8 @@ public class CPU implements Component {
 	}
 
 	private static class LDType {
-		static int byImm = 8;
-		static int byHL = 9;
+		static int byImm = 9;
+		static int byHL = 8;
 	}
 
 	@Override
@@ -1087,8 +1103,8 @@ public class CPU implements Component {
 
 	private void generateInstructions() {
 		InstrGen gen = new InstrGen(this);
-		nInstr = new Instr[255];
-		eInstr = new Instr[255];
+		nInstr = new Instr[256];
+		eInstr = new Instr[256];
 		// ---------8-bit loads-----------
 		// reg, imm
 		nInstr[0x06] = gen.createLD8_RegImm(RG_B);
@@ -1228,7 +1244,7 @@ public class CPU implements Component {
 		nInstr[0x85] = gen.createADD(RG_L);
 		nInstr[0x86] = gen.createADD(LDType.byHL);
 		nInstr[0xC6] = gen.createADD(LDType.byImm);
-		
+
 		nInstr[0x8F] = gen.createADC(RG_A);
 		nInstr[0x88] = gen.createADC(RG_B);
 		nInstr[0x89] = gen.createADC(RG_C);
@@ -1238,7 +1254,7 @@ public class CPU implements Component {
 		nInstr[0x8D] = gen.createADC(RG_L);
 		nInstr[0x8E] = gen.createADC(LDType.byHL);
 		nInstr[0xCE] = gen.createADC(LDType.byImm);
-	
+
 		nInstr[0x97] = gen.createSUB(RG_A);
 		nInstr[0x90] = gen.createSUB(RG_B);
 		nInstr[0x91] = gen.createSUB(RG_C);
@@ -1248,7 +1264,7 @@ public class CPU implements Component {
 		nInstr[0x95] = gen.createSUB(RG_L);
 		nInstr[0x96] = gen.createSUB(LDType.byHL);
 		nInstr[0xD6] = gen.createSUB(LDType.byImm);
-		         
+
 		nInstr[0x9F] = gen.createSBC(RG_A);
 		nInstr[0x98] = gen.createSBC(RG_B);
 		nInstr[0x99] = gen.createSBC(RG_C);
@@ -1257,8 +1273,8 @@ public class CPU implements Component {
 		nInstr[0x9C] = gen.createSBC(RG_H);
 		nInstr[0x9D] = gen.createSBC(RG_L);
 		nInstr[0x9E] = gen.createSBC(LDType.byHL);
-		//nInstr[0xDE] = gen.createSBC(LDType.byImm); //unknown
-		
+		// nInstr[0xDE] = gen.createSBC(LDType.byImm); //unknown
+
 		nInstr[0xA7] = gen.createAND(RG_A);
 		nInstr[0xA0] = gen.createAND(RG_B);
 		nInstr[0xA1] = gen.createAND(RG_C);
@@ -1268,7 +1284,7 @@ public class CPU implements Component {
 		nInstr[0xA5] = gen.createAND(RG_L);
 		nInstr[0xA6] = gen.createAND(LDType.byHL);
 		nInstr[0xE6] = gen.createAND(LDType.byImm);
-		
+
 		nInstr[0xB7] = gen.createOR(RG_A);
 		nInstr[0xB0] = gen.createOR(RG_B);
 		nInstr[0xB1] = gen.createOR(RG_C);
@@ -1278,7 +1294,7 @@ public class CPU implements Component {
 		nInstr[0xB5] = gen.createOR(RG_L);
 		nInstr[0xB6] = gen.createOR(LDType.byHL);
 		nInstr[0xF6] = gen.createOR(LDType.byImm);
-		
+
 		nInstr[0xAF] = gen.createXOR(RG_A);
 		nInstr[0xA8] = gen.createXOR(RG_B);
 		nInstr[0xA9] = gen.createXOR(RG_C);
@@ -1288,7 +1304,7 @@ public class CPU implements Component {
 		nInstr[0xAD] = gen.createXOR(RG_L);
 		nInstr[0xAE] = gen.createXOR(LDType.byHL);
 		nInstr[0xEE] = gen.createXOR(LDType.byImm);
-		
+
 		nInstr[0xBF] = gen.createCP(RG_A);
 		nInstr[0xB8] = gen.createCP(RG_B);
 		nInstr[0xB9] = gen.createCP(RG_C);
@@ -1298,7 +1314,7 @@ public class CPU implements Component {
 		nInstr[0xBD] = gen.createCP(RG_L);
 		nInstr[0xBE] = gen.createCP(LDType.byHL);
 		nInstr[0xFE] = gen.createCP(LDType.byImm);
-		
+
 		nInstr[0x3C] = gen.createINC(RG_A);
 		nInstr[0x04] = gen.createINC(RG_B);
 		nInstr[0x0C] = gen.createINC(RG_C);
@@ -1307,7 +1323,7 @@ public class CPU implements Component {
 		nInstr[0x24] = gen.createINC(RG_H);
 		nInstr[0x2C] = gen.createINC(RG_L);
 		nInstr[0x34] = gen.createINC(LDType.byHL);
-		
+
 		nInstr[0x3D] = gen.createDEC(RG_A);
 		nInstr[0x05] = gen.createDEC(RG_B);
 		nInstr[0x0D] = gen.createDEC(RG_C);
@@ -1316,65 +1332,65 @@ public class CPU implements Component {
 		nInstr[0x25] = gen.createDEC(RG_H);
 		nInstr[0x2D] = gen.createDEC(RG_L);
 		nInstr[0x35] = gen.createDEC(LDType.byHL);
-		
+
 		// ---------16-BIT artihmetic -----------
 		nInstr[0x09] = gen.createADD16(RG_BC);
 		nInstr[0x19] = gen.createADD16(RG_DE);
 		nInstr[0x29] = gen.createADD16(RG_HL);
 		nInstr[0x39] = gen.createADD16(RG_SP);
-		
+
 		nInstr[0xE8] = gen.createADD16_SP();
-		
+
 		nInstr[0x03] = gen.createINC16(RG_BC);
 		nInstr[0x13] = gen.createINC16(RG_DE);
 		nInstr[0x23] = gen.createINC16(RG_HL);
 		nInstr[0x33] = gen.createINC16(RG_SP);
-		
+
 		nInstr[0x0B] = gen.createDEC16(RG_BC);
 		nInstr[0x1B] = gen.createDEC16(RG_DE);
 		nInstr[0x2B] = gen.createDEC16(RG_HL);
 		nInstr[0x3B] = gen.createDEC16(RG_SP);
-		
+
 		// ---------MISC -----------
-		nInstr[0x37] = gen.createSWAP(RG_A);
-		nInstr[0x30] = gen.createSWAP(RG_B);
-		nInstr[0x31] = gen.createSWAP(RG_C);
-		nInstr[0x32] = gen.createSWAP(RG_D);
-		nInstr[0x33] = gen.createSWAP(RG_E);
-		nInstr[0x34] = gen.createSWAP(RG_H);
-		nInstr[0x35] = gen.createSWAP(RG_L);
-		nInstr[0x36] = gen.createSWAP(LDType.byHL);
-		
+		eInstr[0x37] = gen.createSWAP(RG_A);
+		eInstr[0x30] = gen.createSWAP(RG_B);
+		eInstr[0x31] = gen.createSWAP(RG_C);
+		eInstr[0x32] = gen.createSWAP(RG_D);
+		eInstr[0x33] = gen.createSWAP(RG_E);
+		eInstr[0x34] = gen.createSWAP(RG_H);
+		eInstr[0x35] = gen.createSWAP(RG_L);
+		eInstr[0x36] = gen.createSWAP(LDType.byHL);
+
 		nInstr[0x27] = gen.createDAA();
-		
+
 		nInstr[0x2F] = gen.createCPL();
-		
+
 		nInstr[0x3F] = gen.createCCF();
-		
+
 		nInstr[0x37] = gen.createSCF();
-		
+
 		nInstr[0x00] = gen.createNOP();
-		
+
 		nInstr[0x76] = gen.createHALT();
-		
-		//TODO: STOP
-		
+
+		nInstr[0x10] = gen.createSTOP();
+
 		nInstr[0xF3] = gen.createDI();
-		
+
 		nInstr[0xFB] = gen.createEI();
-		
+
 		// ---------ROTATES AND SHIFTS -----------
-		
+
 		nInstr[0x07] = gen.createRLCA();
-		
+
 		nInstr[0x17] = gen.createRLA();
-		
+
 		nInstr[0x0F] = gen.createRRCA();
-		
+
 		nInstr[0x1F] = gen.createRRA();
-		//--------------------------------------
-		//extended OP codes 
-		//-----------------------------------------
+		// --------------------------------------
+		// extended OP codes
+		// -----------------------------------------
 		eInstr[0x07] = gen.createRLC(RG_A);
 		eInstr[0x00] = gen.createRLC(RG_B);
 		eInstr[0x01] = gen.createRLC(RG_C);
@@ -1383,7 +1399,7 @@ public class CPU implements Component {
 		eInstr[0x04] = gen.createRLC(RG_H);
 		eInstr[0x05] = gen.createRLC(RG_L);
 		eInstr[0x06] = gen.createRLC(LDType.byHL);
-		
+
 		eInstr[0x17] = gen.createRL(RG_A);
 		eInstr[0x10] = gen.createRL(RG_B);
 		eInstr[0x11] = gen.createRL(RG_C);
@@ -1392,7 +1408,7 @@ public class CPU implements Component {
 		eInstr[0x14] = gen.createRL(RG_H);
 		eInstr[0x15] = gen.createRL(RG_L);
 		eInstr[0x16] = gen.createRL(LDType.byHL);
-		
+
 		eInstr[0x0F] = gen.createRRC(RG_A);
 		eInstr[0x08] = gen.createRRC(RG_B);
 		eInstr[0x09] = gen.createRRC(RG_C);
@@ -1401,7 +1417,7 @@ public class CPU implements Component {
 		eInstr[0x0C] = gen.createRRC(RG_H);
 		eInstr[0x0D] = gen.createRRC(RG_L);
 		eInstr[0x0E] = gen.createRRC(LDType.byHL);
-		
+
 		eInstr[0x1F] = gen.createRR(RG_A);
 		eInstr[0x18] = gen.createRR(RG_B);
 		eInstr[0x19] = gen.createRR(RG_C);
@@ -1410,7 +1426,7 @@ public class CPU implements Component {
 		eInstr[0x1C] = gen.createRR(RG_H);
 		eInstr[0x1D] = gen.createRR(RG_L);
 		eInstr[0x1E] = gen.createRR(LDType.byHL);
-		
+
 		eInstr[0x27] = gen.createSLA(RG_A);
 		eInstr[0x20] = gen.createSLA(RG_B);
 		eInstr[0x21] = gen.createSLA(RG_C);
@@ -1419,7 +1435,7 @@ public class CPU implements Component {
 		eInstr[0x24] = gen.createSLA(RG_H);
 		eInstr[0x25] = gen.createSLA(RG_L);
 		eInstr[0x26] = gen.createSLA(LDType.byHL);
-		
+
 		eInstr[0x2F] = gen.createSRA(RG_A);
 		eInstr[0x28] = gen.createSRA(RG_B);
 		eInstr[0x29] = gen.createSRA(RG_C);
@@ -1428,7 +1444,7 @@ public class CPU implements Component {
 		eInstr[0x2C] = gen.createSRA(RG_H);
 		eInstr[0x2D] = gen.createSRA(RG_L);
 		eInstr[0x2E] = gen.createSRA(LDType.byHL);
-		
+
 		eInstr[0x3F] = gen.createSRL(RG_A);
 		eInstr[0x38] = gen.createSRL(RG_B);
 		eInstr[0x39] = gen.createSRL(RG_C);
@@ -1437,52 +1453,119 @@ public class CPU implements Component {
 		eInstr[0x3C] = gen.createSRL(RG_H);
 		eInstr[0x3D] = gen.createSRL(RG_L);
 		eInstr[0x3E] = gen.createSRL(LDType.byHL);
-		
-		// TODO: SET; BIT; RES
+
+		// BIT
+		for (int i = 0; i < 4; i++) {
+			eInstr[0x40 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_B);
+			eInstr[0x41 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_C);
+			eInstr[0x42 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_D);
+			eInstr[0x43 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_E);
+			eInstr[0x44 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_H);
+			eInstr[0x45 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_L);
+			eInstr[0x46 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_HL);
+			eInstr[0x47 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_A);
+		}
+
+		for (int i = 0; i < 4; i++) {
+			eInstr[0x48 + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_B);
+			eInstr[0x49 + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_C);
+			eInstr[0x4A + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_D);
+			eInstr[0x4B + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_E);
+			eInstr[0x4C + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_H);
+			eInstr[0x4D + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_L);
+			eInstr[0x4E + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_HL);
+			eInstr[0x4F + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_A);
+		}
+
+		// RES
+		for (int i = 0; i < 4; i++) {
+			eInstr[0x80 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_B);
+			eInstr[0x81 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_C);
+			eInstr[0x82 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_D);
+			eInstr[0x83 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_E);
+			eInstr[0x84 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_H);
+			eInstr[0x85 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_L);
+			eInstr[0x86 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_HL);
+			eInstr[0x87 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_A);
+		}
+
+		for (int i = 0; i < 4; i++) {
+			eInstr[0x88 + 0x10 * i] = gen.createRES(1 + 2 * i, RG_B);
+			eInstr[0x89 + 0x10 * i] = gen.createRES(1 + 2 * i, RG_C);
+			eInstr[0x8A + 0x10 * i] = gen.createRES(1 + 2 * i, RG_D);
+			eInstr[0x8B + 0x10 * i] = gen.createRES(1 + 2 * i, RG_E);
+			eInstr[0x8C + 0x10 * i] = gen.createRES(1 + 2 * i, RG_H);
+			eInstr[0x8D + 0x10 * i] = gen.createRES(1 + 2 * i, RG_L);
+			eInstr[0x8E + 0x10 * i] = gen.createRES(1 + 2 * i, RG_HL);
+			eInstr[0x8F + 0x10 * i] = gen.createRES(1 + 2 * i, RG_A);
+		}
+
+		// SET
+		for (int i = 0; i < 4; i++) {
+			eInstr[0xC0 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_B);
+			eInstr[0xC1 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_C);
+			eInstr[0xC2 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_D);
+			eInstr[0xC3 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_E);
+			eInstr[0xC4 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_H);
+			eInstr[0xC5 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_L);
+			eInstr[0xC6 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_HL);
+			eInstr[0xC7 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_A);
+		}                                       
+                                               
+		for (int i = 0; i < 4; i++) {           
+			eInstr[0xC8 + 0x10 * i] = gen.createSET(1 + 2 * i, RG_B);
+			eInstr[0xC9 + 0x10 * i] = gen.createSET(1 + 2 * i, RG_C);
+			eInstr[0xCA + 0x10 * i] = gen.createSET(1 + 2 * i, RG_D);
+			eInstr[0xCB + 0x10 * i] = gen.createSET(1 + 2 * i, RG_E);
+			eInstr[0xCC + 0x10 * i] = gen.createSET(1 + 2 * i, RG_H);
+			eInstr[0xCD + 0x10 * i] = gen.createSET(1 + 2 * i, RG_L);
+			eInstr[0xCE + 0x10 * i] = gen.createSET(1 + 2 * i, RG_HL);
+			eInstr[0xCF + 0x10 * i] = gen.createSET(1 + 2 * i, RG_A);
+		}
 		
 		// ---------JUMPS -----------
-		nInstr[0xC3]= gen.createJP(JMP_ALWAYS, JMP_ALWAYS);
-		
-		nInstr[0xC2]= gen.createJP(Z, JMP_NZ);
-		nInstr[0xCA]= gen.createJP(Z, JMP_Z);
-		nInstr[0xD2]= gen.createJP(C, JMP_NC);
-		nInstr[0xDA]= gen.createJP(C, JMP_C);
-		
-		nInstr[0xE9]= gen.createJPHL();
-		
-		nInstr[0x18]= gen.createJR(JMP_ALWAYS, JMP_ALWAYS);
-		
-		nInstr[0x20]= gen.createJR(Z, JMP_NZ);
-		nInstr[0x28]= gen.createJR(Z, JMP_Z);
-		nInstr[0x30]= gen.createJR(C, JMP_NC);
-		nInstr[0x38]= gen.createJR(C, JMP_C);
-		
-		nInstr[0x12]= gen.createCALL(JMP_ALWAYS, JMP_ALWAYS);
-		
-		nInstr[0xC4]= gen.createCALL(Z, JMP_NZ);
-		nInstr[0xCC]= gen.createCALL(Z, JMP_Z);
-		nInstr[0xD4]= gen.createCALL(C, JMP_NC);
-		nInstr[0xDC]= gen.createCALL(C, JMP_C);
-		
+		nInstr[0xC3] = gen.createJP(JMP_ALWAYS, JMP_ALWAYS);
+
+		nInstr[0xC2] = gen.createJP(Z, JMP_NZ);
+		nInstr[0xCA] = gen.createJP(Z, JMP_Z);
+		nInstr[0xD2] = gen.createJP(C, JMP_NC);
+		nInstr[0xDA] = gen.createJP(C, JMP_C);
+
+		nInstr[0xE9] = gen.createJPHL();
+
+		nInstr[0x18] = gen.createJR(JMP_ALWAYS, JMP_ALWAYS);
+
+		nInstr[0x20] = gen.createJR(Z, JMP_NZ);
+		nInstr[0x28] = gen.createJR(Z, JMP_Z);
+		nInstr[0x30] = gen.createJR(C, JMP_NC);
+		nInstr[0x38] = gen.createJR(C, JMP_C);
+
+		nInstr[0x12] = gen.createCALL(JMP_ALWAYS, JMP_ALWAYS);
+
+		nInstr[0xC4] = gen.createCALL(Z, JMP_NZ);
+		nInstr[0xCC] = gen.createCALL(Z, JMP_Z);
+		nInstr[0xD4] = gen.createCALL(C, JMP_NC);
+		nInstr[0xDC] = gen.createCALL(C, JMP_C);
+
 		// ---------RESTARTS -----------
-		nInstr[0xC7]= gen.createRST(0x00);
-		nInstr[0xCF]= gen.createRST(0x08);
-		nInstr[0xD7]= gen.createRST(0x10);
-		nInstr[0xDF]= gen.createRST(0x18);
-		nInstr[0xE7]= gen.createRST(0x20);
-		nInstr[0xEF]= gen.createRST(0x28);
-		nInstr[0xF7]= gen.createRST(0x30);
-		nInstr[0xFF]= gen.createRST(0x38);
-		
-		// ---------RETURNS  -----------
-		nInstr[0xC9]= gen.createRET(JMP_ALWAYS, JMP_ALWAYS);
-		
-		nInstr[0xC0]= gen.createRET(Z, JMP_NZ);
-		nInstr[0xC8]= gen.createRET(Z, JMP_Z);
-		nInstr[0xD0]= gen.createRET(C, JMP_NC);
-		nInstr[0xD8]= gen.createRET(C, JMP_C);
-		
-		nInstr[0xD9]= gen.createRETI();
-		
+		nInstr[0xC7] = gen.createRST(0x00);
+		nInstr[0xCF] = gen.createRST(0x08);
+		nInstr[0xD7] = gen.createRST(0x10);
+		nInstr[0xDF] = gen.createRST(0x18);
+		nInstr[0xE7] = gen.createRST(0x20);
+		nInstr[0xEF] = gen.createRST(0x28);
+		nInstr[0xF7] = gen.createRST(0x30);
+		nInstr[0xFF] = gen.createRST(0x38);
+
+		// ---------RETURNS -----------
+		nInstr[0xC9] = gen.createRET(JMP_ALWAYS, JMP_ALWAYS);
+
+		nInstr[0xC0] = gen.createRET(Z, JMP_NZ);
+		nInstr[0xC8] = gen.createRET(Z, JMP_Z);
+		nInstr[0xD0] = gen.createRET(C, JMP_NC);
+		nInstr[0xD8] = gen.createRET(C, JMP_C);
+
+		nInstr[0xD9] = gen.createRETI();
+
 	}
 }
