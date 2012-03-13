@@ -13,14 +13,14 @@ public class Rom {
 	private byte[][] rom;
 
 	private String title;
-	private int cgbflag;
+	private byte cgbflag;
 	private int sgbflag;
 	private int cartridgetype;
 	private int romsize;
 	private int ramsize;
 	private int destination;
 	private int maskRomVersionNumber;
-	private int headerchecksum;
+	private byte headerchecksum;
 	private int globalchecksum;
 	private int banks16kB;
 
@@ -57,17 +57,17 @@ public class Rom {
 		headerchecksum = header[0x14D];
 		globalchecksum = (header[0x14E] & 0xff) << 8 | (header[0x14F] & 0xff);
 
-		cartridgeAsString = "Title:" + title + nl + "CGB flag:" + cgbflag + nl + "Cartridgetype:"
+		cartridgeAsString = "Title:" + title + nl + "CGB flag:" + Utils.dumpHex(cgbflag) + nl + "Cartridgetype:"
 				+ getCartridgeType(cartridgetype) + nl + "Rom size:" + romsize + " in 16kB:" + banks16kB + nl
 				+ "Ram size:" + ramsize + nl + "Destination:" + destination + nl + "Mask rom version num:"
-				+ maskRomVersionNumber + nl + "Header checksum:" + Utils.dumpHex(headerchecksum&0xff) + nl
-				+ "Global checksum:" + Utils.dumpHex(globalchecksum);
+				+ maskRomVersionNumber + nl + "Header checksum:" + Utils.dumpHex(headerchecksum) + nl
+				+ "Global checksum:" + Utils.dumpHex(globalchecksum)+ nl;
 
 		// load in 16kB chunks
 		try {
-			rom = new byte[banks16kB][0x8000];
+			rom = new byte[banks16kB][0x4000];
 			for (int i = 0; i < banks16kB; i++) {
-				for (int x = 0; x < 0x8000; x++) {
+				for (int x = 0; x < 0x4000; x++) {
 					rom[i][x] = (byte) is.read();
 				}
 			}

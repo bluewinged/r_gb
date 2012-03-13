@@ -3,6 +3,7 @@ package ch.gb.cpu;
 import ch.gb.Component;
 import ch.gb.GBComponents;
 import ch.gb.mem.MemoryManager;
+import ch.gb.utils.Utils;
 
 /**
  * Mixture between 8080 and z80
@@ -60,6 +61,10 @@ public class CPU implements Component {
 	private boolean halt;
 	private MemoryManager mem;
 
+	private final boolean debug = true;
+	private int debugpc;
+	private String debuginf;
+
 	private Instr[] nInstr;// normal
 	private Instr[] eInstr;// extended
 
@@ -69,17 +74,30 @@ public class CPU implements Component {
 		generateInstructions();
 	}
 
-	public void tick() {
+	public int tick() {
 		if (!halt) {
-			int opcode = mem.readByte(pc++) & 0xff;
+			debugpc = pc;
+			debuginf = "idling";
 
-			if (opcode == 0xCB) {
-				eInstr[mem.readByte(pc++) & 0xff].compile();
+			byte opcode = mem.readByte(pc++);
+
+			if ((opcode & 0xff) == 0xCB) {
+				int np = mem.readByte(pc++) & 0xff;
+				debuginf = "PC:" + Utils.dumpHex(debugpc) + "  CB   " + Utils.dumpHex(opcode) + "  " + eInstr[np].name;
+				eInstr[np].compile();
 			} else {
-				nInstr[opcode].compile();
+				debuginf = "PC:" + Utils.dumpHex(debugpc) + "  " + Utils.dumpHex(opcode) + "  "
+						+ nInstr[opcode & 0xff].name + "   AF:" + Utils.dumpHex(rd16reg(RG_AF)) + "   BC:"
+						+ Utils.dumpHex(rd16reg(RG_BC)) + "   DE:" + Utils.dumpHex(rd16reg(RG_DE)) + "   HL:"
+						+ Utils.dumpHex(rd16reg(RG_HL));
+				nInstr[opcode & 0xff].compile();
+
 			}
+			if (debug)
+				System.out.println(debuginf);
 		}
 		checkInterrupts();
+		return 8;// assume 8 clockcycles
 	}
 
 	private void checkInterrupts() {
@@ -98,7 +116,7 @@ public class CPU implements Component {
 		// ----------------------------------------------------------
 		// 8-bit loads
 		Instr createLD8_RegAddr(final int reg, final int dreg) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					regs[reg] = mem.readByte(rd16reg(dreg));
@@ -107,7 +125,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_AddrReg(final int dreg, final int reg) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					mem.writeByte(rd16reg(dreg), regs[reg]);
@@ -116,7 +134,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_RegReg(final int reg1, final int reg2) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					regs[reg1] = regs[reg2];
@@ -125,7 +143,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_RegImm(final int reg) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					regs[reg] = mem.readByte(pc++);
@@ -134,7 +152,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_AddrImm(final int dreg) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					mem.writeByte(rd16reg(dreg), mem.readByte(pc++));
@@ -143,7 +161,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_RegImAd(final int reg) {// immediate address
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					regs[reg] = mem.readByte(mem.read2Byte(pc));
@@ -153,7 +171,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_ImAdReg(final int reg) {// immediate address
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					mem.writeByte(mem.read2Byte(pc), regs[reg]);
@@ -163,7 +181,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_RegIOn(final int reg) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					regs[reg] = mem.readByte(0xFF00 + (mem.readByte(pc++) & 0xff));
@@ -172,7 +190,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_IOnReg(final int reg) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					mem.writeByte(0xFF00 + (mem.readByte(pc++) & 0xff), regs[reg]);
@@ -181,7 +199,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_RegIOc(final int reg) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					regs[reg] = mem.readByte(0xFF00 + regs[RG_C] & 0xff);
@@ -190,7 +208,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD8_IOcReg(final int reg) {
-			return new Instr(cpu, "LDA") {
+			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
 					mem.writeByte(0xFF00 + regs[RG_C] & 0xff, regs[reg]);
@@ -199,7 +217,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD_ID_HLA(final boolean inc) {
-			String name = (inc ? "LDI" : "LDD");
+			String name = (inc ? "LDI  " : "LDD  ");
 			return new Instr(cpu, name) {
 				@Override
 				void compile() {
@@ -214,7 +232,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD_ID_AHL(final boolean inc) {
-			String name = (inc ? "LDI" : "LDD");
+			String name = (inc ? "LDI  " : "LDD  ");
 			return new Instr(cpu, name) {
 				@Override
 				void compile() {
@@ -231,7 +249,7 @@ public class CPU implements Component {
 		// ----------------------------------------------------------
 		// 16-bit loads
 		Instr createLD16_RegImm(final int dreg) {
-			return new Instr(cpu, "LD") {
+			return new Instr(cpu, "LD   ") {
 				@Override
 				void compile() {
 					wr16reg(dreg, mem.read2Byte(pc));
@@ -241,7 +259,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD16_SPHL() {
-			return new Instr(cpu, "LD") {
+			return new Instr(cpu, "LD   ") {
 				@Override
 				void compile() {
 					sp = rd16reg(RG_HL);
@@ -250,7 +268,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLDHL16_SPn() {
-			return new Instr(cpu, "LDHL") {
+			return new Instr(cpu, "LDHL ") {
 				@Override
 				void compile() {
 
@@ -267,7 +285,7 @@ public class CPU implements Component {
 		}
 
 		Instr createLD16_ImmSP() {
-			return new Instr(cpu, "LD") {
+			return new Instr(cpu, "LD   ") {
 				@Override
 				void compile() {
 					int n = mem.read2Byte(pc);
@@ -278,7 +296,7 @@ public class CPU implements Component {
 		}
 
 		Instr createPUSH(final int dreg) {
-			return new Instr(cpu, "push") {
+			return new Instr(cpu, "PUSH ") {
 				@Override
 				void compile() {
 					push2(cpu.rd16reg(dreg));
@@ -287,7 +305,7 @@ public class CPU implements Component {
 		}
 
 		Instr createPOP(final int dreg) {
-			return new Instr(cpu, "pop") {
+			return new Instr(cpu, "POP  ") {
 				@Override
 				void compile() {
 					cpu.wr16reg(dreg, pop2());
@@ -298,7 +316,7 @@ public class CPU implements Component {
 		// ----------------------------------------------------------
 		// 8-bit-Arithmetic/logical commands
 		Instr createADD(final int ldtype) {
-			return new Instr(cpu, "ADD") {
+			return new Instr(cpu, "ADD  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -319,7 +337,7 @@ public class CPU implements Component {
 		}
 
 		Instr createADC(final int ldtype) {
-			return new Instr(cpu, "ADC") {
+			return new Instr(cpu, "ADC  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -342,7 +360,7 @@ public class CPU implements Component {
 		}
 
 		Instr createSUB(final int ldtype) {
-			return new Instr(cpu, "SUB") {
+			return new Instr(cpu, "SUB  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -364,7 +382,7 @@ public class CPU implements Component {
 		}
 
 		Instr createSBC(final int ldtype) {
-			return new Instr(cpu, "SBC") {
+			return new Instr(cpu, "SBC  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -388,7 +406,7 @@ public class CPU implements Component {
 		}
 
 		Instr createAND(final int ldtype) {
-			return new Instr(cpu, "AND") {
+			return new Instr(cpu, "AND  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -402,7 +420,7 @@ public class CPU implements Component {
 		}
 
 		Instr createOR(final int ldtype) {
-			return new Instr(cpu, "OR") {
+			return new Instr(cpu, "OR   ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -415,7 +433,7 @@ public class CPU implements Component {
 		}
 
 		Instr createXOR(final int ldtype) {
-			return new Instr(cpu, "XOR") {
+			return new Instr(cpu, "XOR  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -428,7 +446,7 @@ public class CPU implements Component {
 		}
 
 		Instr createCP(final int ldtype) {
-			return new Instr(cpu, "CP") {
+			return new Instr(cpu, "CP   ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -445,7 +463,7 @@ public class CPU implements Component {
 		}
 
 		Instr createINC(final int ldtype) {
-			return new Instr(cpu, "INC") {
+			return new Instr(cpu, "INC  ") {
 				@Override
 				void compile() {
 					regs[RG_F] &= C;
@@ -466,7 +484,7 @@ public class CPU implements Component {
 		}
 
 		Instr createDEC(final int ldtype) {
-			return new Instr(cpu, "DEC") {
+			return new Instr(cpu, "DEC  ") {
 				@Override
 				void compile() {
 					regs[RG_F] &= C;
@@ -501,7 +519,7 @@ public class CPU implements Component {
 		// ----------------------------------------------------------
 		// 16-bit-Arithmetic/logical commands
 		Instr createADD16(final int dreg) {
-			return new Instr(cpu, "ADD") {
+			return new Instr(cpu, "ADD  ") {
 				@Override
 				void compile() {
 					regs[RG_F] &= Z;
@@ -519,7 +537,7 @@ public class CPU implements Component {
 		}
 
 		Instr createADD16_SP() {
-			return new Instr(cpu, "ADD") {
+			return new Instr(cpu, "ADD  ") {
 				@Override
 				void compile() {
 					regs[RG_F] = 0;
@@ -536,7 +554,7 @@ public class CPU implements Component {
 		}
 
 		Instr createINC16(final int dreg) {
-			return new Instr(cpu, "INC") {
+			return new Instr(cpu, "INC  ") {
 				@Override
 				void compile() {
 					inc16re(dreg);
@@ -545,7 +563,7 @@ public class CPU implements Component {
 		}
 
 		Instr createDEC16(final int dreg) {
-			return new Instr(cpu, "DEC") {
+			return new Instr(cpu, "DEC  ") {
 				@Override
 				void compile() {
 					dec16re(dreg);
@@ -556,7 +574,7 @@ public class CPU implements Component {
 		// ----------------------------------------------------------
 		// MISC
 		Instr createSWAP(final int ldtype) {
-			return new Instr(cpu, "SWAP") {
+			return new Instr(cpu, "SWAP ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -575,7 +593,7 @@ public class CPU implements Component {
 		}
 
 		Instr createDAA() {
-			return new Instr(cpu, "DAA") {
+			return new Instr(cpu, "DAA  ") {
 				@Override
 				void compile() {
 
@@ -584,7 +602,7 @@ public class CPU implements Component {
 		}
 
 		Instr createCPL() {
-			return new Instr(cpu, "CPL") {
+			return new Instr(cpu, "CPL  ") {
 				@Override
 				void compile() {
 					regs[RG_F] |= N;
@@ -595,7 +613,7 @@ public class CPU implements Component {
 		}
 
 		Instr createCCF() {
-			return new Instr(cpu, "CCF") {
+			return new Instr(cpu, "CCF  ") {
 				@Override
 				void compile() {
 					regs[RG_F] ^= C;
@@ -605,7 +623,7 @@ public class CPU implements Component {
 		}
 
 		Instr createSCF() {
-			return new Instr(cpu, "SCF") {
+			return new Instr(cpu, "SCF  ") {
 				@Override
 				void compile() {
 					regs[RG_F] |= C;
@@ -615,7 +633,7 @@ public class CPU implements Component {
 		}
 
 		Instr createNOP() {
-			return new Instr(cpu, "NOP") {
+			return new Instr(cpu, "NOP  ") {
 				@Override
 				void compile() {
 					// best instr
@@ -624,7 +642,7 @@ public class CPU implements Component {
 		}
 
 		Instr createHALT() {
-			return new Instr(cpu, "HALT") {
+			return new Instr(cpu, "HALT ") {
 				@Override
 				void compile() {
 					interruptMaster = true;
@@ -634,7 +652,7 @@ public class CPU implements Component {
 		}
 
 		Instr createSTOP() {
-			return new Instr(cpu, "STOP") {
+			return new Instr(cpu, "STOP ") {
 				@Override
 				void compile() {
 					// TODO: stop CPU AND LCD till button pressed
@@ -643,7 +661,7 @@ public class CPU implements Component {
 		}
 
 		Instr createDI() {
-			return new Instr(cpu, "DI") {
+			return new Instr(cpu, "DI   ") {
 				@Override
 				void compile() {
 					// TODO: do DI
@@ -653,7 +671,7 @@ public class CPU implements Component {
 		}
 
 		Instr createEI() {
-			return new Instr(cpu, "EI") {
+			return new Instr(cpu, "EI   ") {
 				@Override
 				void compile() {
 					// TODO: do EI
@@ -665,7 +683,7 @@ public class CPU implements Component {
 		// ----------------------------------------------------------
 		// Rotates and shifts
 		Instr createRLCA() {
-			return new Instr(cpu, "RLCA") {
+			return new Instr(cpu, "RLCA ") {
 				@Override
 				void compile() {
 					regs[RG_F] = (byte) ((regs[RG_A] & 0x80) >> 3);// also
@@ -680,7 +698,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRLA() {
-			return new Instr(cpu, "RLA") {
+			return new Instr(cpu, "RLA   ") {
 				@Override
 				void compile() {
 					regs[RG_F] &= C;
@@ -695,7 +713,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRRCA() {
-			return new Instr(cpu, "RRCA") {
+			return new Instr(cpu, "RRCA ") {
 				@Override
 				void compile() {
 					regs[RG_F] = (byte) ((regs[RG_A] & 1) << 4);// bit 0 to
@@ -711,7 +729,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRRA() {
-			return new Instr(cpu, "RRA") {
+			return new Instr(cpu, "RRA  ") {
 				@Override
 				void compile() {
 					regs[RG_F] &= C;
@@ -726,7 +744,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRLC(final int ldtype) {
-			return new Instr(cpu, "RLC") {
+			return new Instr(cpu, "RLC  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -746,7 +764,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRL(final int ldtype) {
-			return new Instr(cpu, "RL") {
+			return new Instr(cpu, "RL   ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -768,7 +786,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRRC(final int ldtype) {
-			return new Instr(cpu, "RRC") {
+			return new Instr(cpu, "RRC  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -788,7 +806,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRR(final int ldtype) {
-			return new Instr(cpu, "RR") {
+			return new Instr(cpu, "RR   ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -810,7 +828,7 @@ public class CPU implements Component {
 		}
 
 		Instr createSLA(final int ldtype) {
-			return new Instr(cpu, "SLA") {
+			return new Instr(cpu, "SLA  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -829,7 +847,7 @@ public class CPU implements Component {
 		}
 
 		Instr createSRA(final int ldtype) {
-			return new Instr(cpu, "SRA") {
+			return new Instr(cpu, "SRA  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -848,7 +866,7 @@ public class CPU implements Component {
 		}
 
 		Instr createSRL(final int ldtype) {
-			return new Instr(cpu, "SRL") {
+			return new Instr(cpu, "SRL  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -869,7 +887,7 @@ public class CPU implements Component {
 		// -----------------------------------------------------------
 		// BIT opcodes
 		Instr createBIT(final int bit, final int ldtype) {
-			return new Instr(cpu, "BIT") {
+			return new Instr(cpu, "BIT  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -882,7 +900,7 @@ public class CPU implements Component {
 		}
 
 		Instr createSET(final int bit, final int ldtype) {
-			return new Instr(cpu, "SET") {
+			return new Instr(cpu, "SET  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -898,7 +916,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRES(final int bit, final int ldtype) {
-			return new Instr(cpu, "RES") {
+			return new Instr(cpu, "RES  ") {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
@@ -916,7 +934,7 @@ public class CPU implements Component {
 		// -----------------------------------------------------------
 		// Jumps //TODO: adjust clocks
 		Instr createJP(final int flag, final int condition) {
-			return new Instr(cpu, "JP") {
+			return new Instr(cpu, "JP   ") {
 				@Override
 				void compile() {
 					int n = mem.read2Byte(pc);
@@ -929,7 +947,7 @@ public class CPU implements Component {
 		}
 
 		Instr createJPHL() {
-			return new Instr(cpu, "JP") {
+			return new Instr(cpu, "JP   ") {
 				@Override
 				void compile() {
 					pc = rd16reg(RG_HL);
@@ -938,7 +956,7 @@ public class CPU implements Component {
 		}
 
 		Instr createJR(final int flag, final int condition) {
-			return new Instr(cpu, "JR") {
+			return new Instr(cpu, "JR   ") {
 				@Override
 				void compile() {
 					byte n = mem.readByte(pc++);
@@ -952,7 +970,7 @@ public class CPU implements Component {
 		// -----------------------------------------------------------
 		// CALLS //TODO: adjust clocks
 		Instr createCALL(final int flag, final int condition) {
-			return new Instr(cpu, "CALL") {
+			return new Instr(cpu, "CALL ") {
 				@Override
 				void compile() {
 					int n = mem.read2Byte(pc);
@@ -968,7 +986,7 @@ public class CPU implements Component {
 		// -----------------------------------------------------------
 		// RESTARTS //TODO: adjust clocks
 		Instr createRST(final int args) {
-			return new Instr(cpu, "RST") {
+			return new Instr(cpu, "RST  ") {
 				@Override
 				void compile() {
 					push2(pc);
@@ -980,7 +998,7 @@ public class CPU implements Component {
 		// -----------------------------------------------------------
 		// RETURNS //TODO: adjust clocks
 		Instr createRET(final int flag, final int condition) {
-			return new Instr(cpu, "RET") {
+			return new Instr(cpu, "RET  ") {
 				@Override
 				void compile() {
 					if ((regs[RG_F] & flag) == condition) {
@@ -991,7 +1009,7 @@ public class CPU implements Component {
 		}
 
 		Instr createRETI() {
-			return new Instr(cpu, "RETI") {
+			return new Instr(cpu, "RETI ") {
 				@Override
 				void compile() {
 					pc = pop2();
@@ -1008,13 +1026,13 @@ public class CPU implements Component {
 		if (reg == 8) {
 			sp = s & 0xffff;// overflow control
 		} else {
-			regs[reg] = (byte) (s & 0xff);
-			regs[reg + 1] = (byte) (s >> 8 & 0xff);
+			regs[reg] = (byte) (s >> 8 & 0xff);
+			regs[reg + 1] = (byte) (s & 0xff);
 		}
 	}
 
 	int rd16reg(int reg) {
-		return reg == 8 ? sp : (regs[reg] << 8 & 0xff) | (regs[reg + 1] & 0xff);
+		return reg == 8 ? sp : (regs[reg] << 8 & 0xff00) | (regs[reg + 1] & 0xff);
 	}
 
 	void inc16re(int reg) {
@@ -1063,10 +1081,15 @@ public class CPU implements Component {
 	@Override
 	public void reset() {
 		pc = 0x100;
-		wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
-		wr16reg(RG_BC, 0x0013);
-		wr16reg(RG_DE, 0x00D8);
-		wr16reg(RG_HL, 0x014D);
+		//wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
+		//wr16reg(RG_BC, 0x0013);
+		//wr16reg(RG_DE, 0x00D8);
+		//wr16reg(RG_HL, 0x014D);
+		wr16reg(RG_AF, 0x1180);// for GBC its 0x11B0
+		wr16reg(RG_BC, 0x0000);
+		wr16reg(RG_DE, 0xFF56);
+		wr16reg(RG_HL, 0x000D);
+		
 		sp = 0xFFFE;
 		mem.writeByte(0xFF05, (byte) 0x00);// TIMA
 		mem.writeByte(0xFF06, (byte) 0x00);// TMA
@@ -1510,9 +1533,9 @@ public class CPU implements Component {
 			eInstr[0xC5 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_L);
 			eInstr[0xC6 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_HL);
 			eInstr[0xC7 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_A);
-		}                                       
-                                               
-		for (int i = 0; i < 4; i++) {           
+		}
+
+		for (int i = 0; i < 4; i++) {
 			eInstr[0xC8 + 0x10 * i] = gen.createSET(1 + 2 * i, RG_B);
 			eInstr[0xC9 + 0x10 * i] = gen.createSET(1 + 2 * i, RG_C);
 			eInstr[0xCA + 0x10 * i] = gen.createSET(1 + 2 * i, RG_D);
@@ -1522,7 +1545,7 @@ public class CPU implements Component {
 			eInstr[0xCE + 0x10 * i] = gen.createSET(1 + 2 * i, RG_HL);
 			eInstr[0xCF + 0x10 * i] = gen.createSET(1 + 2 * i, RG_A);
 		}
-		
+
 		// ---------JUMPS -----------
 		nInstr[0xC3] = gen.createJP(JMP_ALWAYS, JMP_ALWAYS);
 
@@ -1540,7 +1563,7 @@ public class CPU implements Component {
 		nInstr[0x30] = gen.createJR(C, JMP_NC);
 		nInstr[0x38] = gen.createJR(C, JMP_C);
 
-		nInstr[0x12] = gen.createCALL(JMP_ALWAYS, JMP_ALWAYS);
+		nInstr[0xCD] = gen.createCALL(JMP_ALWAYS, JMP_ALWAYS);
 
 		nInstr[0xC4] = gen.createCALL(Z, JMP_NZ);
 		nInstr[0xCC] = gen.createCALL(Z, JMP_Z);

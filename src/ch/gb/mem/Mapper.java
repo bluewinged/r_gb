@@ -22,6 +22,9 @@ public abstract class Mapper {
 		case 0x00:
 			mbc = new RomOnly();
 			break;
+		case 0x01:
+			mbc = new MBC1();
+			break;
 		}
 		mbc.setMem(mem);
 		mbc.setRom(rom);

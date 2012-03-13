@@ -48,7 +48,7 @@ public class Utils {
 	}
 
 	public static String dumpHex(byte hex) {
-		return String.format("%02X", hex);
+		return String.format("%02X", hex&0xff);
 	}
 
 	public static String dumpHex(int word) {

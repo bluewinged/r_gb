@@ -33,6 +33,9 @@ public class MemoryManager implements Component {
 	}
 
 	public void writeByte(int add, byte b) {
+	
+				//System.out.println("write happened to :"+Utils.dumpHex(add)+"->"+Utils.dumpHex(b));
+	
 		if (add < 0x4000) {
 			// 16kB Rom bank #0
 			mbc.write(add, b);
@@ -48,7 +51,7 @@ public class MemoryManager implements Component {
 			internalRam[add - 0xC000] = b;
 		} else if (add < 0xFE00) {
 			// Mirror of 8kB internal Ram
-			internalRam[add & 0x2000] = b;
+			internalRam[add-0xE000] = b;
 		} else if (add < 0xFEA0) {
 			// OAM
 		} else if (add < 0xFF00) {
@@ -59,6 +62,7 @@ public class MemoryManager implements Component {
 				
 			} else if (add == SB) {
 				tmp[0]=serialtransferdata = b;
+				System.out.print(Utils.decASCII(tmp)); //HOLY SHIT
 			} else if (add == SC) {
 				if(b==0x81){
 					System.out.print(Utils.decASCII(tmp));
