@@ -61,7 +61,7 @@ public class CPU implements Component {
 	private boolean halt;
 	private MemoryManager mem;
 
-	private final boolean debug = true;
+	private final boolean debug = false;
 	private int debugpc;
 	private String debuginf;
 
@@ -86,10 +86,11 @@ public class CPU implements Component {
 				debuginf = "PC:" + Utils.dumpHex(debugpc) + "  CB   " + Utils.dumpHex(opcode) + "  " + eInstr[np].name;
 				eInstr[np].compile();
 			} else {
+				// System.out.println("ERR:"+Utils.dumpHex(opcode));
 				debuginf = "PC:" + Utils.dumpHex(debugpc) + "  " + Utils.dumpHex(opcode) + "  "
 						+ nInstr[opcode & 0xff].name + "   AF:" + Utils.dumpHex(rd16reg(RG_AF)) + "   BC:"
 						+ Utils.dumpHex(rd16reg(RG_BC)) + "   DE:" + Utils.dumpHex(rd16reg(RG_DE)) + "   HL:"
-						+ Utils.dumpHex(rd16reg(RG_HL));
+						+ Utils.dumpHex(rd16reg(RG_HL)) + "   SP:" + Utils.dumpHex(rd16reg(RG_SP));
 				nInstr[opcode & 0xff].compile();
 
 			}
@@ -202,7 +203,7 @@ public class CPU implements Component {
 			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
-					regs[reg] = mem.readByte(0xFF00 + regs[RG_C] & 0xff);
+					regs[reg] = mem.readByte(0xFF00 + (regs[RG_C] & 0xff));
 				}
 			};
 		}
@@ -211,7 +212,7 @@ public class CPU implements Component {
 			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
-					mem.writeByte(0xFF00 + regs[RG_C] & 0xff, regs[reg]);
+					mem.writeByte(0xFF00 + (regs[RG_C] & 0xff), regs[reg]);
 				}
 			};
 		}
@@ -278,7 +279,7 @@ public class CPU implements Component {
 					regs[RG_F] = 0;
 					if ((sp + n) > 0xffff)
 						regs[RG_F] |= C;
-					if ((sp ^ (n & 0xff) ^ ((sp + n) & 0xffff)) > 0)
+					if (((sp ^ (n & 0xff) ^ (sp + n)) & 0x1000) == 0x1000)
 						regs[RG_F] |= H;
 				}
 			};
@@ -325,10 +326,10 @@ public class CPU implements Component {
 					if (((regs[RG_A] & 0xF) + (n & 0xF)) > 0xF)
 						regs[RG_F] |= H;
 
-					if ((regs[RG_A] + n) > 0xFF)
+					if (((regs[RG_A] & 0xff) + (n & 0xff)) > 0xFF)
 						regs[RG_F] |= C;
 
-					regs[RG_A] += n;
+					regs[RG_A] += (n & 0xff);
 
 					if (regs[RG_A] == 0)
 						regs[RG_F] |= Z;
@@ -348,10 +349,10 @@ public class CPU implements Component {
 					if (((regs[RG_A] & 0xF) + (n & 0xF) + carry) > 0xF)
 						regs[RG_F] |= H;
 
-					if ((regs[RG_A] + n + carry) > 0xFF)
+					if (((regs[RG_A] & 0xff) + (n & 0xff) + carry) > 0xFF)
 						regs[RG_F] |= C;
 
-					regs[RG_A] += n + carry;
+					regs[RG_A] += (n & 0xff) + carry;
 
 					if (regs[RG_A] == 0)
 						regs[RG_F] |= Z;
@@ -370,7 +371,7 @@ public class CPU implements Component {
 					if (((regs[RG_A] & 0xF) < (n & 0xF)))
 						regs[RG_F] |= H;
 
-					if (regs[RG_A] < n)
+					if ((regs[RG_A] & 0xff) < (n & 0xff))
 						regs[RG_F] |= C;
 
 					regs[RG_A] -= n;
@@ -386,21 +387,20 @@ public class CPU implements Component {
 				@Override
 				void compile() {
 					byte n = ldByType(ldtype);
-					regs[RG_F] = 0;
-					regs[RG_F] |= N;
-
-					int carry = (regs[RG_F] >> 4) & 1;
-
-					if (((regs[RG_A] & 0xF) < (n & 0xF) + carry))
+					int un = n & 0xff;
+					byte tmpa = regs[RG_A];
+					int ua = regs[RG_A] & 0xff;
+					// regs[RG_F] = 0;
+					ua -= un;
+					ua -= (regs[RG_F] & C) == C ? 1 : 0;
+					regs[RG_F] = ua < 0 ? (byte) 0x50 : (byte) 0x40;
+					ua &= 0xff;
+					if (ua == 0)
+						regs[RG_F] |= Z;
+					if (((ua ^ un ^ tmpa) & 0x10) == 0x10)
 						regs[RG_F] |= H;
 
-					if (regs[RG_A] < n + carry)
-						regs[RG_F] |= C;
-
-					regs[RG_A] -= (n + carry);
-
-					if (regs[RG_A] == 0)
-						regs[RG_F] |= Z;
+					regs[RG_A] = (byte) ua;
 				}
 			};
 		}
@@ -438,7 +438,7 @@ public class CPU implements Component {
 				void compile() {
 					byte n = ldByType(ldtype);
 					regs[RG_F] = 0;
-					regs[RG_A] ^= n;
+					regs[RG_A] = (byte) ((regs[RG_A] & 0xff) ^ (n & 0xff));
 					if (regs[RG_A] == 0)
 						regs[RG_F] |= Z;
 				}
@@ -456,7 +456,7 @@ public class CPU implements Component {
 						regs[RG_F] |= Z;
 					if ((regs[RG_A] & 0xF) < (n & 0xF))
 						regs[RG_F] |= H;
-					if (regs[RG_A] < n)
+					if ((regs[RG_A] & 0xff) < (n & 0xff))
 						regs[RG_F] |= C;
 				}
 			};
@@ -524,31 +524,36 @@ public class CPU implements Component {
 				void compile() {
 					regs[RG_F] &= Z;
 					int n = rd16reg(dreg);
+
 					int hl = rd16reg(RG_HL);
 
 					if ((n & 0xFFF) + (hl & 0xFFF) > 0xFFF)// overflow 11
 						regs[RG_F] |= H;
 					hl += n;
-					if (hl > 0xFFFFF)
+					if (hl > 0xFFFF)
 						regs[RG_F] |= C;
+
 					wr16reg(RG_HL, hl);
 				}
 			};
 		}
 
-		Instr createADD16_SP() {
+		Instr createADD16_SPn() {
 			return new Instr(cpu, "ADD  ") {
 				@Override
 				void compile() {
 					regs[RG_F] = 0;
 					byte n = mem.readByte(pc++);// immediate
+
 					if (((sp ^ (n & 0xff) ^ ((sp + n) & 0xffff))) > 0)
 						regs[RG_F] |= H;
+
 					sp += n;
 					if (sp > 0xffff) {
 						regs[RG_F] |= C;
-						sp &= 0xffff;
 					}
+					sp &= 0xffff;
+
 				}
 			};
 		}
@@ -691,8 +696,8 @@ public class CPU implements Component {
 																	// N, H
 					regs[RG_A] <<= 1;
 					regs[RG_A] |= (regs[RG_F] >> 4 & 1);
-					if (regs[RG_A] == 0)
-						regs[RG_F] |= Z;
+					// if (regs[RG_A] == 0)//fixes it
+					// regs[RG_F] |= Z;
 				}
 			};
 		}
@@ -706,8 +711,8 @@ public class CPU implements Component {
 					regs[RG_A] <<= 1;
 					regs[RG_A] |= regs[RG_F] >> 4 & 1;
 					regs[RG_F] <<= 4;
-					if (regs[RG_A] == 0)
-						regs[RG_F] |= Z;
+					// if (regs[RG_A] == 0)
+					// regs[RG_F] |= Z;
 				}
 			};
 		}
@@ -722,8 +727,8 @@ public class CPU implements Component {
 																	// at
 																	// rightshifting
 					regs[RG_A] |= (regs[RG_F] << 3 & 0x80);// carry to bit 7
-					if (regs[RG_A] == 0)
-						regs[RG_F] |= Z;
+					// if (regs[RG_A] == 0)
+					// regs[RG_F] |= Z;
 				}
 			};
 		}
@@ -737,8 +742,8 @@ public class CPU implements Component {
 					regs[RG_A] = (byte) ((regs[RG_A] & 0xff) >> 1);
 					regs[RG_A] |= (regs[RG_F] & C) << 3; // bit 4 to 7
 					regs[RG_F] <<= 4; // bit 0 to carry
-					if (regs[RG_A] == 0)
-						regs[RG_F] |= Z;
+					// if (regs[RG_A] == 0)
+					// regs[RG_F] |= Z;
 				}
 			};
 		}
@@ -940,6 +945,7 @@ public class CPU implements Component {
 					int n = mem.read2Byte(pc);
 					pc += 2;
 					if ((regs[RG_F] & flag) == condition) {
+						// System.out.println("DUDE IMMA JUMPING TO:"+Utils.dumpHex(n));
 						pc = n;
 					}
 				}
@@ -1032,7 +1038,7 @@ public class CPU implements Component {
 	}
 
 	int rd16reg(int reg) {
-		return reg == 8 ? sp : (regs[reg] << 8 & 0xff00) | (regs[reg + 1] & 0xff);
+		return reg == 8 ? sp & 0xffff : (regs[reg] << 8 & 0xff00) | (regs[reg + 1] & 0xff);
 	}
 
 	void inc16re(int reg) {
@@ -1044,13 +1050,27 @@ public class CPU implements Component {
 	}
 
 	void push2(int data) {
-		sp -= 2;
-		mem.write2Byte(sp, data);
+		sp = (sp - 1) & 0xffff;
+		mem.writeByte(sp, (byte) ((data >> 8) & 0xff));
+		sp = (sp - 1) & 0xffff;
+		mem.writeByte(sp, (byte) (data & 0xff));
+
+		// sp -= 2;
+		// mem.write2Byte(sp, data);
+		// mem.writeByte(sp - 1, (byte) ((data >> 8) & 0xff));
+		// mem.writeByte(sp - 2, (byte) (data & 0xff));
+		// sp -= 2;
 	}
 
 	int pop2() {
-		int data = mem.read2Byte(sp);
-		sp += 2;
+		// int data = mem.read2Byte(sp);
+		// sp += 2;
+
+		int data = mem.readByte(sp) & 0xff;
+		sp = (sp + 1) & 0xffff;
+		data |= ((mem.readByte(sp) & 0xff) << 8);
+		sp = (sp + 1) & 0xffff;
+
 		return data;
 	}
 
@@ -1081,15 +1101,15 @@ public class CPU implements Component {
 	@Override
 	public void reset() {
 		pc = 0x100;
-		//wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
-		//wr16reg(RG_BC, 0x0013);
-		//wr16reg(RG_DE, 0x00D8);
-		//wr16reg(RG_HL, 0x014D);
+		// wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
+		// wr16reg(RG_BC, 0x0013);
+		// wr16reg(RG_DE, 0x00D8);
+		// wr16reg(RG_HL, 0x014D);
 		wr16reg(RG_AF, 0x1180);// for GBC its 0x11B0
 		wr16reg(RG_BC, 0x0000);
 		wr16reg(RG_DE, 0xFF56);
 		wr16reg(RG_HL, 0x000D);
-		
+
 		sp = 0xFFFE;
 		mem.writeByte(0xFF05, (byte) 0x00);// TIMA
 		mem.writeByte(0xFF06, (byte) 0x00);// TMA
@@ -1296,7 +1316,7 @@ public class CPU implements Component {
 		nInstr[0x9C] = gen.createSBC(RG_H);
 		nInstr[0x9D] = gen.createSBC(RG_L);
 		nInstr[0x9E] = gen.createSBC(LDType.byHL);
-		// nInstr[0xDE] = gen.createSBC(LDType.byImm); //unknown
+		nInstr[0xDE] = gen.createSBC(LDType.byImm); // unknown
 
 		nInstr[0xA7] = gen.createAND(RG_A);
 		nInstr[0xA0] = gen.createAND(RG_B);
@@ -1362,7 +1382,7 @@ public class CPU implements Component {
 		nInstr[0x29] = gen.createADD16(RG_HL);
 		nInstr[0x39] = gen.createADD16(RG_SP);
 
-		nInstr[0xE8] = gen.createADD16_SP();
+		nInstr[0xE8] = gen.createADD16_SPn();
 
 		nInstr[0x03] = gen.createINC16(RG_BC);
 		nInstr[0x13] = gen.createINC16(RG_DE);
@@ -1485,7 +1505,7 @@ public class CPU implements Component {
 			eInstr[0x43 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_E);
 			eInstr[0x44 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_H);
 			eInstr[0x45 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_L);
-			eInstr[0x46 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_HL);
+			eInstr[0x46 + 0x10 * i] = gen.createBIT(0 + 2 * i, LDType.byHL);
 			eInstr[0x47 + 0x10 * i] = gen.createBIT(0 + 2 * i, RG_A);
 		}
 
@@ -1496,7 +1516,7 @@ public class CPU implements Component {
 			eInstr[0x4B + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_E);
 			eInstr[0x4C + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_H);
 			eInstr[0x4D + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_L);
-			eInstr[0x4E + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_HL);
+			eInstr[0x4E + 0x10 * i] = gen.createBIT(1 + 2 * i, LDType.byHL);
 			eInstr[0x4F + 0x10 * i] = gen.createBIT(1 + 2 * i, RG_A);
 		}
 
@@ -1508,7 +1528,7 @@ public class CPU implements Component {
 			eInstr[0x83 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_E);
 			eInstr[0x84 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_H);
 			eInstr[0x85 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_L);
-			eInstr[0x86 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_HL);
+			eInstr[0x86 + 0x10 * i] = gen.createRES(0 + 2 * i, LDType.byHL);
 			eInstr[0x87 + 0x10 * i] = gen.createRES(0 + 2 * i, RG_A);
 		}
 
@@ -1519,7 +1539,7 @@ public class CPU implements Component {
 			eInstr[0x8B + 0x10 * i] = gen.createRES(1 + 2 * i, RG_E);
 			eInstr[0x8C + 0x10 * i] = gen.createRES(1 + 2 * i, RG_H);
 			eInstr[0x8D + 0x10 * i] = gen.createRES(1 + 2 * i, RG_L);
-			eInstr[0x8E + 0x10 * i] = gen.createRES(1 + 2 * i, RG_HL);
+			eInstr[0x8E + 0x10 * i] = gen.createRES(1 + 2 * i, LDType.byHL);
 			eInstr[0x8F + 0x10 * i] = gen.createRES(1 + 2 * i, RG_A);
 		}
 
@@ -1531,7 +1551,7 @@ public class CPU implements Component {
 			eInstr[0xC3 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_E);
 			eInstr[0xC4 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_H);
 			eInstr[0xC5 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_L);
-			eInstr[0xC6 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_HL);
+			eInstr[0xC6 + 0x10 * i] = gen.createSET(0 + 2 * i, LDType.byHL);
 			eInstr[0xC7 + 0x10 * i] = gen.createSET(0 + 2 * i, RG_A);
 		}
 
@@ -1542,7 +1562,7 @@ public class CPU implements Component {
 			eInstr[0xCB + 0x10 * i] = gen.createSET(1 + 2 * i, RG_E);
 			eInstr[0xCC + 0x10 * i] = gen.createSET(1 + 2 * i, RG_H);
 			eInstr[0xCD + 0x10 * i] = gen.createSET(1 + 2 * i, RG_L);
-			eInstr[0xCE + 0x10 * i] = gen.createSET(1 + 2 * i, RG_HL);
+			eInstr[0xCE + 0x10 * i] = gen.createSET(1 + 2 * i, LDType.byHL);
 			eInstr[0xCF + 0x10 * i] = gen.createSET(1 + 2 * i, RG_A);
 		}
 

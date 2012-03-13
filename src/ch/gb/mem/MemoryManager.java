@@ -17,9 +17,9 @@ public class MemoryManager implements Component {
 
 	private byte serialtransferdata;
 	private byte serialtransfercontrol;
-	
+
 	private final byte[] tmp = new byte[1];
-	
+
 	private final byte[] cpumem;
 	public byte[][] rombanks;
 	private final byte[] internalRam;
@@ -33,9 +33,9 @@ public class MemoryManager implements Component {
 	}
 
 	public void writeByte(int add, byte b) {
-	
-				//System.out.println("write happened to :"+Utils.dumpHex(add)+"->"+Utils.dumpHex(b));
-	
+
+		// System.out.println("write happened to :"+Utils.dumpHex(add)+"->"+Utils.dumpHex(b));
+
 		if (add < 0x4000) {
 			// 16kB Rom bank #0
 			mbc.write(add, b);
@@ -51,7 +51,7 @@ public class MemoryManager implements Component {
 			internalRam[add - 0xC000] = b;
 		} else if (add < 0xFE00) {
 			// Mirror of 8kB internal Ram
-			internalRam[add-0xE000] = b;
+			internalRam[add - 0xE000] = b;
 		} else if (add < 0xFEA0) {
 			// OAM
 		} else if (add < 0xFF00) {
@@ -59,14 +59,14 @@ public class MemoryManager implements Component {
 		} else if (add < 0xFF4C) {
 			// I/O ports
 			if (add == JOYP) {
-				
+
 			} else if (add == SB) {
-				tmp[0]=serialtransferdata = b;
-				System.out.print(Utils.decASCII(tmp)); //HOLY SHIT
+				tmp[0] = serialtransferdata = b;
+				System.out.print(Utils.decASCII(tmp)); // HOLY SHIT
 			} else if (add == SC) {
-				if(b==0x81){
+				if (b == 0x81) {
 					System.out.print(Utils.decASCII(tmp));
-					serialtransfercontrol = 1; //transfer "finished"
+					serialtransfercontrol = 1; // transfer "finished"
 				}
 			}
 		} else if (add < 0xFF80) {
@@ -104,7 +104,7 @@ public class MemoryManager implements Component {
 		} else if (add < 0xFF4C) {
 			// I/O ports
 			if (add == JOYP) {
-				
+
 			} else if (add == SB) {
 				return serialtransferdata;
 			} else if (add == SC) {
@@ -121,12 +121,16 @@ public class MemoryManager implements Component {
 	}
 
 	public void write2Byte(int add, int s) {
-		writeByte(add, (byte) (s & 0xff));
-		writeByte(add + 1, (byte) (s >> 8 & 0xff));
+		 writeByte(add, (byte) (s & 0xff));
+		 writeByte(add + 1, (byte) (s >> 8 & 0xff));
+		//writeByte(add, (byte) (s >> 8 & 0xff));
+		//writeByte(add + 1, (byte) (s & 0xff));
+
 	}
 
 	public int read2Byte(int add) {
-		return ((readByte(add) & 0xff) | (readByte(add + 1) & 0xff) << 8);
+		 return ((readByte(add) & 0xff) | (readByte(add + 1) & 0xff) << 8);
+		//return ((readByte(add ) & 0xff) << 8) | (readByte(add+1) & 0xff);
 	}
 
 	public void loadRom(String path) {
