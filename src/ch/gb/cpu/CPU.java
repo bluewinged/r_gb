@@ -61,7 +61,7 @@ public class CPU implements Component {
 	private boolean halt;
 	private MemoryManager mem;
 
-	private final boolean debug = false;
+	private final static boolean DEBUG_ENABLED = false;
 	private int debugpc;
 	private String debuginf;
 
@@ -83,18 +83,26 @@ public class CPU implements Component {
 
 			if ((opcode & 0xff) == 0xCB) {
 				int np = mem.readByte(pc++) & 0xff;
-				debuginf = "PC:" + Utils.dumpHex(debugpc) + "  CB   " + Utils.dumpHex(opcode) + "  " + eInstr[np].name;
+
+				if (DEBUG_ENABLED)
+					debuginf = "PC:" + Utils.dumpHex(debugpc) + "  CB   " + Utils.dumpHex(opcode) + "  "
+							+ eInstr[np].name;
+
 				eInstr[np].compile();
 			} else {
 				// System.out.println("ERR:"+Utils.dumpHex(opcode));
-				debuginf = "PC:" + Utils.dumpHex(debugpc) + "  " + Utils.dumpHex(opcode) + "  "
-						+ nInstr[opcode & 0xff].name + "   AF:" + Utils.dumpHex(rd16reg(RG_AF)) + "   BC:"
-						+ Utils.dumpHex(rd16reg(RG_BC)) + "   DE:" + Utils.dumpHex(rd16reg(RG_DE)) + "   HL:"
-						+ Utils.dumpHex(rd16reg(RG_HL)) + "   SP:" + Utils.dumpHex(rd16reg(RG_SP));
+
+				if (DEBUG_ENABLED) {
+					debuginf = "PC:" + Utils.dumpHex(debugpc) + "  " + Utils.dumpHex(opcode) + "  "
+							+ nInstr[opcode & 0xff].name + "   AF:" + Utils.dumpHex(rd16reg(RG_AF)) + "   BC:"
+							+ Utils.dumpHex(rd16reg(RG_BC)) + "   DE:" + Utils.dumpHex(rd16reg(RG_DE)) + "   HL:"
+							+ Utils.dumpHex(rd16reg(RG_HL)) + "   SP:" + Utils.dumpHex(rd16reg(RG_SP));
+				}
 				nInstr[opcode & 0xff].compile();
 
 			}
-			if (debug)
+
+			if (DEBUG_ENABLED)
 				System.out.println(debuginf);
 		}
 		checkInterrupts();
@@ -274,13 +282,16 @@ public class CPU implements Component {
 				void compile() {
 
 					byte n = mem.readByte(pc++);
-					wr16reg(RG_HL, sp + n);
+					wr16reg(RG_HL, (sp + n) & 0xffff);
 
+					int check = sp ^ (n) ^ ((sp + n) & 0xffff);
 					regs[RG_F] = 0;
-					if ((sp + n) > 0xffff)
+
+					if ((check & 0x100) == 0x100)
 						regs[RG_F] |= C;
-					if (((sp ^ (n & 0xff) ^ (sp + n)) & 0x1000) == 0x1000)
+					if ((check & 0x10) == 0x10)
 						regs[RG_F] |= H;
+
 				}
 			};
 		}
@@ -309,7 +320,12 @@ public class CPU implements Component {
 			return new Instr(cpu, "POP  ") {
 				@Override
 				void compile() {
-					cpu.wr16reg(dreg, pop2());
+					if (dreg != RG_AF) {
+						cpu.wr16reg(dreg, pop2());
+					} else {
+						cpu.wr16reg(RG_AF, pop2() & 0xFFF0);
+					}
+
 				}
 			};
 		}
@@ -545,15 +561,15 @@ public class CPU implements Component {
 					regs[RG_F] = 0;
 					byte n = mem.readByte(pc++);// immediate
 
-					if (((sp ^ (n & 0xff) ^ ((sp + n) & 0xffff))) > 0)
-						regs[RG_F] |= H;
+					int check = sp ^ n ^ ((sp + n) & 0xffff);
 
-					sp += n;
-					if (sp > 0xffff) {
+					sp = ((sp + n) & 0xffff);
+					regs[RG_F] = 0;
+					
+					if ((check & 0x100) == 0x100)
 						regs[RG_F] |= C;
-					}
-					sp &= 0xffff;
-
+					if ((check & 0x10) == 0x10)
+						regs[RG_F] |= H;
 				}
 			};
 		}
@@ -601,7 +617,31 @@ public class CPU implements Component {
 			return new Instr(cpu, "DAA  ") {
 				@Override
 				void compile() {
+					// by blargg
+					byte flags = regs[RG_F];
+					int a = regs[RG_A] & 0xff;
 
+					if ((flags & N) == 0) {
+						if ((flags & H) == H || (a & 0x0F) > 9)
+							a += 6;
+
+						if ((flags & C) == C || (a > 0x9F))
+							a += 0x60;
+					} else {
+						if ((flags & H) == H)
+							a = (a - 6) & 0xff;
+
+						if ((flags & C) == C)
+							a -= 0x60;
+					}
+
+					regs[RG_F] &= ~(H | Z);
+					if ((a & 0x100) == 0x100)
+						regs[RG_F] |= C;
+
+					regs[RG_A] = (byte) a;
+					if (regs[RG_A] == 0)
+						regs[RG_F] |= Z;
 				}
 			};
 		}
