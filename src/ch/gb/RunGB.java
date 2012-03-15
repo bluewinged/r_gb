@@ -36,8 +36,10 @@ public class RunGB implements ApplicationListener {
 		//@formatter:off
 		//mem.loadRom("Roms/Tetris.gb");
 		// mem.loadRom("Roms/Asteroids.gb");
+		
+		//CPU INSTRUCTION TESTS - ALL PASSED
 		//mem.loadRom("Testroms/cpu_instrs/individual/01-special.gb");//PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/02-interrupts.gb"); //FAILED #2
+		mem.loadRom("Testroms/cpu_instrs/individual/02-interrupts.gb"); //FAILED #4 Timer doesnt work
 		//mem.loadRom("Testroms/cpu_instrs/individual/03-op sp,hl.gb");// PASSED
 		//mem.loadRom("Testroms/cpu_instrs/individual/04-op r,imm.gb");//PASSED
 		//mem.loadRom("Testroms/cpu_instrs/individual/06-ld r,r.gb");//PASSED
@@ -46,6 +48,10 @@ public class RunGB implements ApplicationListener {
 		//mem.loadRom("Testroms/cpu_instrs/individual/09-op r,r.gb");// PASSED
 		//mem.loadRom("Testroms/cpu_instrs/individual/10-bit ops.gb");// PASSED FUCK YEAH
 		//mem.loadRom("Testroms/cpu_instrs/individual/11-op a,(hl).gb");// PASSED
+		
+		//CPU TIMING TESTS - ALL UNTESTED
+		
+		
 		//@formatter:on
 
 		// Utils.dumpMem(mem.rombanks[0]);
@@ -77,7 +83,7 @@ public class RunGB implements ApplicationListener {
 			}
 			cpuacc -= cyclesperframe;
 		}
-		
+
 		// FPS
 		batch.begin();
 		font.draw(batch, "FPS:" + Gdx.graphics.getFramesPerSecond(), 50, 50);

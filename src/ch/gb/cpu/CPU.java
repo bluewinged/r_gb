@@ -51,13 +51,17 @@ public class CPU implements Component {
 	int sp;
 
 	// interrupt specific
-	public static final int IR_VBLANK = 0x40;
-	public static final int IR_LCD = 0x48;
-	public static final int IR_TIMER = 0x50;
-	public static final int IR_JOY = 0x60;
+	public static final int VEC_VBLANK = 0x40;
+	public static final int VEC_LCD = 0x48;
+	public static final int VEC_TIMER = 0x50;
+	public static final int VEC_SERIAL = 0x58;
+	public static final int VEC_JOY = 0x60;
+
+	public static final int IE_REG = 0xFFFF;// interrupt enable (masks)
+	public static final int IF_REG = 0xFF0F;// interrupt flag (requests)
 
 	private int delayIE;
-	private boolean interruptMaster;
+	private boolean ime;// interrupt master enabled flag
 	private boolean halt;
 	private MemoryManager mem;
 
@@ -68,6 +72,23 @@ public class CPU implements Component {
 	private Instr[] nInstr;// normal
 	private Instr[] eInstr;// extended
 
+	private static final int[] nCycles = { 1, 3, 2, 2, 1, 1, 2, 1, 5, 2, 2, 2, 1, 1, 2, 1, 0, 3, 2, 2, 1, 1, 2, 1, 3,
+			2, 2, 2, 1, 1, 2, 1, 2, 3, 2, 2, 1, 1, 2, 1, 2, 2, 2, 2, 1, 1, 2, 1, 2, 3, 2, 2, 3, 3, 3, 1, 2, 2, 2, 2, 1,
+			1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1,
+			1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 2, 2, 0, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1,
+			1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1,
+			1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 3, 3, 4, 3, 4, 2, 4, 2, 4, 3, 0, 3,
+			6, 2, 4, 2, 3, 3, 0, 3, 4, 2, 4, 2, 4, 3, 0, 3, 0, 2, 4, 3, 3, 2, 0, 0, 4, 2, 4, 4, 1, 4, 0, 0, 0, 2, 4, 3,
+			3, 2, 1, 0, 4, 2, 4, 3, 2, 4, 1, 0, 0, 2, 4 };
+	private static final int[] eCycles = { 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2,
+			2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2,
+			2, 4, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2,
+			2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2,
+			2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2,
+			2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2,
+			2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2,
+			2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2 };
+
 	private int consumedCycles;
 
 	public CPU() {
@@ -75,6 +96,7 @@ public class CPU implements Component {
 	}
 
 	public int tick() {
+		checkInterrupts();
 		if (!halt) {
 			debugpc = pc;
 			debuginf = "idling";
@@ -88,7 +110,9 @@ public class CPU implements Component {
 					debuginf = "PC:" + Utils.dumpHex(debugpc) + "  CB   " + Utils.dumpHex(opcode) + "  "
 							+ eInstr[np].name;
 
+				consumedCycles = eCycles[np] * 4;// machine -> clock cycles
 				eInstr[np].compile();
+
 			} else {
 				// System.out.println("ERR:"+Utils.dumpHex(opcode));
 
@@ -98,6 +122,8 @@ public class CPU implements Component {
 							+ Utils.dumpHex(rd16reg(RG_BC)) + "   DE:" + Utils.dumpHex(rd16reg(RG_DE)) + "   HL:"
 							+ Utils.dumpHex(rd16reg(RG_HL)) + "   SP:" + Utils.dumpHex(rd16reg(RG_SP));
 				}
+				consumedCycles = nCycles[opcode & 0xff] * 4;// machine -> clock
+															// cycles
 				nInstr[opcode & 0xff].compile();
 
 			}
@@ -105,12 +131,65 @@ public class CPU implements Component {
 			if (DEBUG_ENABLED)
 				System.out.println(debuginf);
 		}
-		checkInterrupts();
-		return 8;// assume 8 clockcycles
+
+		return consumedCycles;// assume 8 clockcycles
 	}
 
 	private void checkInterrupts() {
+		if (ime) {
+			byte irq = mem.readByte(IF_REG);
+			byte ie = mem.readByte(IE_REG);
+			
+			if (irq != 0) {
+				if((irq&1)==1 &&(ie&1)==1){
+					//V-Blank
+					ime = false;
+					push2(pc);
+					irq &= 0xFE;
+					mem.writeByte(IF_REG, irq);
+					pc = VEC_VBLANK;
+					return;
+				}else if((irq&2)==2 &&(ie&2)==2){
+					//LCD
+					ime = false;
+					push2(pc);
+					irq &= 0xFD;
+					mem.writeByte(IF_REG, irq);
+					pc = VEC_LCD;
+					return;
+				}else if((irq&4)==4 && (ie&4)==4){
+					//Timer
+					ime = false;
+					push2(pc);
+					irq &= 0xFB;
+					mem.writeByte(IF_REG, irq);
+					pc = VEC_TIMER;
+					return;
+				}else if((irq&8)==8 &&(ie&8)==8){
+					//Serial
+					ime = false;
+					push2(pc);
+					irq &= 0xF7;
+					mem.writeByte(IF_REG, irq);
+					pc = VEC_SERIAL;
+					return;
+				}else if((irq&0x10)==0x10 && (ie&0x10)==0x10){
+					//Joypad
+					ime = false;
+					push2(pc);
+					irq &= 0xEF;
+					mem.writeByte(IF_REG, irq);
+					pc = VEC_JOY;
+					return;
+				}
+			}
+		}
+	}
 
+	public void requestInterrupt(int i) {
+		byte irq = mem.readByte(IF_REG);
+		irq = (byte) (irq | (1 << i));
+		mem.writeByte(IF_REG, irq);
 	}
 
 	// -----------------------------------------------------------
@@ -565,7 +644,7 @@ public class CPU implements Component {
 
 					sp = ((sp + n) & 0xffff);
 					regs[RG_F] = 0;
-					
+
 					if ((check & 0x100) == 0x100)
 						regs[RG_F] |= C;
 					if ((check & 0x10) == 0x10)
@@ -690,7 +769,7 @@ public class CPU implements Component {
 			return new Instr(cpu, "HALT ") {
 				@Override
 				void compile() {
-					interruptMaster = true;
+					ime = true;
 					halt = true;
 				}
 			};
@@ -709,8 +788,7 @@ public class CPU implements Component {
 			return new Instr(cpu, "DI   ") {
 				@Override
 				void compile() {
-					// TODO: do DI
-					interruptMaster = false;
+					ime = false;
 				}
 			};
 		}
@@ -719,8 +797,7 @@ public class CPU implements Component {
 			return new Instr(cpu, "EI   ") {
 				@Override
 				void compile() {
-					// TODO: do EI
-					interruptMaster = true;
+					ime = true;
 				}
 			};
 		}
@@ -1059,7 +1136,7 @@ public class CPU implements Component {
 				@Override
 				void compile() {
 					pc = pop2();
-					// TOOD: ENBALE INTERRUPTS
+					ime = true;
 				}
 			};
 		}
