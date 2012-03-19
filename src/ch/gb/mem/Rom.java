@@ -57,11 +57,12 @@ public class Rom {
 		headerchecksum = header[0x14D];
 		globalchecksum = (header[0x14E] & 0xff) << 8 | (header[0x14F] & 0xff);
 
-		cartridgeAsString = "Title:" + title + nl + "CGB flag:" + Utils.dumpHex(cgbflag) + nl + "Cartridgetype:"
+		cartridgeAsString = "Title:" + title + nl + "CGB flag:" + getGameboyType(cgbflag) + nl + "Cartridgetype:"
 				+ getCartridgeType(cartridgetype) + nl + "Rom size:" + romsize + " in 16kB:" + banks16kB + nl
-				+ "Ram size:" + ramsize + nl + "Destination:" + destination + nl + "Mask rom version num:"
-				+ maskRomVersionNumber + nl + "Header checksum:" + Utils.dumpHex(headerchecksum) + nl
-				+ "Global checksum:" + Utils.dumpHex(globalchecksum)+ nl;
+				+ "Ram size:" + ramsize + nl + "Destination:" + getDestination(destination) + nl
+				+ "Mask rom version num:" + maskRomVersionNumber + nl + "Header checksum:"
+				+ Utils.dumpHex(headerchecksum) + "  " + headerchksum(headerchecksum) + nl + "Global checksum:"
+				+ Utils.dumpHex(globalchecksum) ;
 
 		// load in 16kB chunks
 		try {
@@ -75,7 +76,7 @@ public class Rom {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
+		cartridgeAsString+="  "+globalchksum(globalchecksum);
 	}
 
 	public String getInformation() {
@@ -85,10 +86,12 @@ public class Rom {
 	public int getType() {
 		return cartridgetype;
 	}
-	public byte[] get16kRomBank(int bank){
+
+	public byte[] get16kRomBank(int bank) {
 		return rom[bank];
 	}
-	public byte[] get2kRamBank(int bank){
+
+	public byte[] get2kRamBank(int bank) {
 		return null;
 	}
 
@@ -127,6 +130,32 @@ public class Rom {
 		 case 0xFF : t="HuC1+RAM+BATTERY        " ;break;
 		}  
 		return t;
+	}
+	private String getGameboyType(byte b){
+	  return b==0x80? "Gameboy Color":"Not Gameboy Color";
+	}
+	private String getDestination(int b){
+		return b==0?"Japan":"Non-Japan";
+	}
+	private String headerchksum(byte b){
+		int x =0;
+		//System.out.println(Utils.dumpHex(b));
+		for(int i = 0x134;i<0x14C+1;i++){
+			x= x-header[i]-1;
+		}
+		//System.out.println(Utils.dumpHex((byte)x));
+		return (b&0xff)==(x&0xff)?"(CORRECT)":"(FAILED)";
+	}
+	private String globalchksum(int d){
+		int add=0;
+		for(int i =0; i<romsize;i++){
+			add += (rom[i/0x4000][i%0x4000]&0xff);
+		}
+		add-=header[0x14E];
+		add-=header[0x14F];
+		//System.out.println(Utils.dumpHex(d&0xffff));
+		//System.out.println(Utils.dumpHex(add&0xffff));
+		return (add&0xffff)==(d&0xffff)?"(CORRECT) - not reliable":"(FAILED) - not reliable";
 	}
 	
 }

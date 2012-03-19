@@ -57,6 +57,12 @@ public class CPU implements Component {
 	public static final int VEC_SERIAL = 0x58;
 	public static final int VEC_JOY = 0x60;
 
+	public static final int VBLANK_IR = 0;
+	public static final int LCD_IR = 1;
+	public static final int TIMER_IR = 2;
+	public static final int SERIAL_IR = 3;
+	public static final int JOYPAD_IR = 4;
+
 	public static final int IE_REG = 0xFFFF;// interrupt enable (masks)
 	public static final int IF_REG = 0xFF0F;// interrupt flag (requests)
 
@@ -65,7 +71,7 @@ public class CPU implements Component {
 	private boolean halt;
 	private MemoryManager mem;
 
-	private final static boolean DEBUG_ENABLED = false;
+	public  static boolean DEBUG_ENABLED = false;
 	private int debugpc;
 	private String debuginf;
 
@@ -88,6 +94,14 @@ public class CPU implements Component {
 			2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2,
 			2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2,
 			2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2 };
+	private static final int[] nCyclesTaken = { 1, 3, 2, 2, 1, 1, 2, 1, 5, 2, 2, 2, 1, 1, 2, 1, 0, 3, 2, 2, 1, 1, 2, 1,
+			3, 2, 2, 2, 1, 1, 2, 1, 3, 3, 2, 2, 1, 1, 2, 1, 3, 2, 2, 2, 1, 1, 2, 1, 3, 3, 2, 2, 3, 3, 3, 1, 3, 2, 2, 2,
+			1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1,
+			1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 2, 2, 0, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
+			1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1,
+			1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 5, 3, 4, 4, 6, 4, 2, 4, 5, 4, 4, 0,
+			6, 6, 2, 4, 5, 3, 4, 0, 6, 4, 2, 4, 5, 4, 4, 0, 6, 0, 2, 4, 3, 3, 2, 0, 0, 4, 2, 4, 4, 1, 4, 0, 0, 0, 2, 4,
+			3, 3, 2, 1, 0, 4, 2, 4, 3, 2, 4, 1, 0, 0, 2, 4 };
 
 	private int consumedCycles;
 
@@ -96,7 +110,15 @@ public class CPU implements Component {
 	}
 
 	public int tick() {
+		// System.out.println("PLUGGGG");
+		// for(int i=0; i<0xFF;i++){
+		// if(nCycles[i]!=nCyclesTaken[i]){
+		// System.out.println(Utils.dumpHex(i)+" "+nCycles[i]+" -> "+nCyclesTaken[i]);
+		// }
+		// }
 		checkInterrupts();
+		halt = false;// TODO: halt is bugged
+		consumedCycles = 0;
 		if (!halt) {
 			debugpc = pc;
 			debuginf = "idling";
@@ -139,42 +161,42 @@ public class CPU implements Component {
 		if (ime) {
 			byte irq = mem.readByte(IF_REG);
 			byte ie = mem.readByte(IE_REG);
-			
+
 			if (irq != 0) {
-				if((irq&1)==1 &&(ie&1)==1){
-					//V-Blank
+				if ((irq & 1) == 1 && (ie & 1) == 1) {
+					// V-Blank
 					ime = false;
 					push2(pc);
 					irq &= 0xFE;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_VBLANK;
 					return;
-				}else if((irq&2)==2 &&(ie&2)==2){
-					//LCD
+				} else if ((irq & 2) == 2 && (ie & 2) == 2) {
+					// LCD
 					ime = false;
 					push2(pc);
 					irq &= 0xFD;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_LCD;
 					return;
-				}else if((irq&4)==4 && (ie&4)==4){
-					//Timer
+				} else if ((irq & 4) == 4 && (ie & 4) == 4) {
+					// Timer
 					ime = false;
 					push2(pc);
 					irq &= 0xFB;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_TIMER;
 					return;
-				}else if((irq&8)==8 &&(ie&8)==8){
-					//Serial
+				} else if ((irq & 8) == 8 && (ie & 8) == 8) {
+					// Serial
 					ime = false;
 					push2(pc);
 					irq &= 0xF7;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_SERIAL;
 					return;
-				}else if((irq&0x10)==0x10 && (ie&0x10)==0x10){
-					//Joypad
+				} else if ((irq & 0x10) == 0x10 && (ie & 0x10) == 0x10) {
+					// Joypad
 					ime = false;
 					push2(pc);
 					irq &= 0xEF;
@@ -184,12 +206,6 @@ public class CPU implements Component {
 				}
 			}
 		}
-	}
-
-	public void requestInterrupt(int i) {
-		byte irq = mem.readByte(IF_REG);
-		irq = (byte) (irq | (1 << i));
-		mem.writeByte(IF_REG, irq);
 	}
 
 	// -----------------------------------------------------------
@@ -1062,8 +1078,10 @@ public class CPU implements Component {
 					int n = mem.read2Byte(pc);
 					pc += 2;
 					if ((regs[RG_F] & flag) == condition) {
-						// System.out.println("DUDE IMMA JUMPING TO:"+Utils.dumpHex(n));
 						pc = n;
+						if (flag != JMP_ALWAYS && condition != JMP_ALWAYS) {
+							consumedCycles += 4;
+						}
 					}
 				}
 			};
@@ -1085,6 +1103,9 @@ public class CPU implements Component {
 					byte n = mem.readByte(pc++);
 					if ((regs[RG_F] & flag) == condition) {
 						pc += n;
+						if (flag != JMP_ALWAYS && condition != JMP_ALWAYS) {
+							consumedCycles += 4;
+						}
 					}
 				}
 			};
@@ -1101,6 +1122,9 @@ public class CPU implements Component {
 					if ((regs[RG_F] & flag) == condition) {
 						push2(pc);
 						pc = n;
+						if (flag != JMP_ALWAYS && condition != JMP_ALWAYS) {
+							consumedCycles += 12;
+						}
 					}
 				}
 			};
@@ -1126,6 +1150,9 @@ public class CPU implements Component {
 				void compile() {
 					if ((regs[RG_F] & flag) == condition) {
 						pc = pop2();
+						if (flag != JMP_ALWAYS && condition != JMP_ALWAYS) {
+							consumedCycles += 12;
+						}
 					}
 				}
 			};
@@ -1218,14 +1245,14 @@ public class CPU implements Component {
 	@Override
 	public void reset() {
 		pc = 0x100;
-		// wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
-		// wr16reg(RG_BC, 0x0013);
-		// wr16reg(RG_DE, 0x00D8);
-		// wr16reg(RG_HL, 0x014D);
-		wr16reg(RG_AF, 0x1180);// for GBC its 0x11B0
-		wr16reg(RG_BC, 0x0000);
-		wr16reg(RG_DE, 0xFF56);
-		wr16reg(RG_HL, 0x000D);
+		wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
+		wr16reg(RG_BC, 0x0013);
+		wr16reg(RG_DE, 0x00D8);
+		wr16reg(RG_HL, 0x014D);
+		// wr16reg(RG_AF, 0x1180);// for GBC its 0x11B0
+		// wr16reg(RG_BC, 0x0000);
+		// wr16reg(RG_DE, 0xFF56);
+		// wr16reg(RG_HL, 0x000D);
 
 		sp = 0xFFFE;
 		mem.writeByte(0xFF05, (byte) 0x00);// TIMA
