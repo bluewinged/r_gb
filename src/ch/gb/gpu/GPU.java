@@ -50,8 +50,7 @@ public class GPU implements Component {
 	private byte obp0raw;
 	private byte obp1raw;
 	private final byte[] bgp = { 0, 0, 0, 0 };
-	private final byte[] obp0 = { 0, 0, 0, 0 };
-	private final byte[] obp1 = { 0, 0, 0, 0 };
+	private final byte[][] obp = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
 	// FORMAT: RGBA 10er hex
 	// dark green: 015;056;015 -> 0xF , 0x38, 0xF
 	// green : 048;098;048 -> 0x30, 0x62, 0x30
@@ -106,16 +105,16 @@ public class GPU implements Component {
 			bgp[3] = (byte) (b >> 6 & 3);
 		} else if (add == OBP0) {
 			obp0raw = b;
-			obp0[0] = (byte) (b & 3);
-			obp0[1] = (byte) (b >> 2 & 3);
-			obp0[2] = (byte) (b >> 4 & 3);
-			obp0[3] = (byte) (b >> 6 & 3);
+			obp[0][0] = (byte) (b & 3);
+			obp[0][1] = (byte) (b >> 2 & 3);
+			obp[0][2] = (byte) (b >> 4 & 3);
+			obp[0][3] = (byte) (b >> 6 & 3);
 		} else if (add == OBP1) {
 			obp1raw = b;
-			obp1[0] = (byte) (b & 3);
-			obp1[1] = (byte) (b >> 2 & 3);
-			obp1[2] = (byte) (b >> 4 & 3);
-			obp1[3] = (byte) (b >> 6 & 3);
+			obp[1][0] = (byte) (b & 3);
+			obp[1][1] = (byte) (b >> 2 & 3);
+			obp[1][2] = (byte) (b >> 4 & 3);
+			obp[1][3] = (byte) (b >> 6 & 3);
 		}
 
 	}
@@ -147,13 +146,14 @@ public class GPU implements Component {
 			throw new RuntimeException("GPU->couldnt decode address:" + Utils.dumpHex(add) + " (Read)");
 		}
 	}
+
 	/**
 	 * 160x144 pixels to draw
 	 * 
 	 * @param cpucycles
 	 */
 	public void tick(int cpucycles) {
-		
+
 		if (!lcdEnabled) {
 			scanlinecyc = 456;
 			ly = 0;
@@ -190,7 +190,6 @@ public class GPU implements Component {
 		if (!lcdEnabled)
 			return;
 
-		
 		scanlinecyc -= cpucycles;
 		if (scanlinecyc <= 0) {
 			scanlinecyc = 456 + scanlinecyc; // adjust if taken too many
@@ -207,7 +206,7 @@ public class GPU implements Component {
 			if (ly < 144) {
 				if (bgEnable)
 					drawBg();
-				if(sprEnable)
+				if (sprEnable)
 					drawSpr();
 			}
 		}
@@ -224,6 +223,7 @@ public class GPU implements Component {
 
 		for (int x = 0; x < 160; x++) {
 			int tx = (x + scx) % 256;
+
 			// fetch namtable byte
 			byte tileid = mem.readByte(bgEntry + tx / 8);
 
@@ -238,11 +238,71 @@ public class GPU implements Component {
 			int color = palette[bgp[(lo >> (7 - intilex) & 1) | ((hi >> (7 - intilex) & 1) << 1)]];
 			videobuffer[x][ly] = color;
 		}
-		
 
 	}
+
 	public void drawSpr() {
 
+		for (int i = 0; i < 40; i++) {
+			int ypos = (mem.readByte(0xFE00 + i*4) & 0xff) -16;
+			int xpos = (mem.readByte(0xFE00 + i*4 + 1) & 0xff)-8 ;
+			int tileid = (mem.readByte(0xFE00 + i *4+ 2) & 0xff);
+			byte attr = mem.readByte(0xFE00 + i*4 + 3);
+
+			// 8x8 mode
+			int priority = (attr >> 7) & 1;//TODO: not yet implemented
+			int yflip = (attr >> 6) & 1;
+			int xflip =(attr >> 5) & 1;
+			
+			int pal = (attr >> 4) & 1;
+			int size = spr8x16? 16:8; //16 mode works
+			
+			// clipping
+			if (ly >= ypos && ly < (ypos + size) ) {
+				int line = (ly - ypos);
+				line = yflip == 1 ? 8 - line : line;
+
+				int patternentry = 0x8000 + tileid * 16 + line * 2;
+				byte lo = mem.readByte(patternentry);
+				byte hi = mem.readByte(patternentry + 1);
+
+				for (int x = 0; x < 8; x++) {
+
+					int newx = (xflip == 1 ? x : 7 - x);
+					int tx = xpos+ x;
+
+					int palcolor = obp[pal][(lo >> (newx)) & 1 | ((hi >> (newx)) & 1) << 1];
+
+					if (tx >= 0 && tx < 160 && palcolor != 0) //sprites only have 3 colors
+						videobuffer[tx][ly] = palette[palcolor];
+				}
+
+			}
+		}
+	}
+
+	public int[] get8spr(int line, byte sprid, byte attr) {
+		int priority = (attr >> 7) & 1;
+		int yflip = (attr >> 6) & 1;
+		int xflip = (attr >> 5) & 1;
+		int pal = (attr >> 4) & 1;
+
+		line = line % 8;
+		line = yflip == 1 ? 8 - line : line;
+
+		int table = 0x8000;
+		int tile = sprid & 0xff;
+		int patternentry = table + tile * 16 + line * 2;
+
+		byte lo = mem.readByte(patternentry);
+		byte hi = mem.readByte(patternentry + 1);
+
+		int[] ib = new int[8];
+		for (int i = 0; i < 8; i++) {
+			int shift = seq[xflip][i];
+			ib[i] = palette[obp[pal][(lo >> (shift)) & 1 | ((hi >> (shift)) & 1) << 1]];
+		}
+		return ib;
 	}
 
 	/**
@@ -251,7 +311,7 @@ public class GPU implements Component {
 	public int[] get8bg(int line, byte tile, int table) {
 		line = line % 8;
 		// int target = table == 0 ? 0x8000 : 0x9000;
-		int target =bgWiTiledata;
+		int target = bgWiTiledata;
 		boolean signed = target == 0x9000;
 		int realtile = (signed ? (int) tile : tile & 0xff);
 		int patternentry = target + realtile * 16 + line * 2;
@@ -264,7 +324,7 @@ public class GPU implements Component {
 		return ib;
 	}
 
-
+	private final int[][] seq = { { 7, 6, 5, 4, 3, 2, 1, 0 }, { 0, 1, 2, 3, 4, 5, 6, 7 } };
 
 	@Override
 	public void link(GBComponents comps) {

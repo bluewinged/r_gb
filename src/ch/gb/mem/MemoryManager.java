@@ -97,7 +97,7 @@ public class MemoryManager implements Component {
 			vram[add - 0x8000] = b;
 		} else if (add < 0xC000) {
 			// 8kB exram
-			exram[(add - 0xA000) / 4][add % 0x800] = b;
+			exram[(add - 0xA000) / 0x800][add % 0x800] = b;
 		} else if (add < 0xD000) {
 			// 4kB WRAM 0
 			wram0[add - 0xC000] = b;

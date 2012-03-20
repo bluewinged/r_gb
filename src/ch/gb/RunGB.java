@@ -29,6 +29,8 @@ public class RunGB implements ApplicationListener {
 	private BitmapFont fadeoutFont;
 	private OpenglDisplay screen;
 	private OpenglDisplay map;
+	private OpenglDisplay sprshow;
+
 	private float fontalpha = 1.0f;
 
 	@Override
@@ -38,6 +40,8 @@ public class RunGB implements ApplicationListener {
 		fadeoutFont = new BitmapFont();
 		screen = new OpenglDisplay(160, 144, 256, 16);
 		map = new OpenglDisplay(256, 256, 256, 16);
+		sprshow = new OpenglDisplay(64, 80, 128, 16);
+
 		comps = new GBComponents();
 
 		cpu = new CPU();
@@ -46,15 +50,15 @@ public class RunGB implements ApplicationListener {
 
 		// @formatter:off
 		// GAMES
-		mem.loadRom("Roms/Tetris.gb");//FUCKING HELL YES IT WORKS GODDAMNIT OMGWTFBBQ
-		// mem.loadRom("Roms/Asteroids.gb");
-		// mem.loadRom("Roms/Boulder Dash (U) [!].gb");
-		// mem.loadRom("Roms/Missile Command (U) [M][!].gb");
-		 //mem.loadRom("Roms/Motocross Maniacs (E) [!].gb");
-		// mem.loadRom("Roms/Amida (J).gb");
-		// mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging
-		// mem.loadRom("Roms/Boxxle (U) (V1.1) [!].gb");
-		//mem.loadRom("Roms/Super Mario Land (V1.1) (JUA) [!].gb");
+		//mem.loadRom("Roms/Tetris.gb");//FUCKING HELL YES IT WORKS GODDAMNIT OMGWTFBBQ, no window
+		// mem.loadRom("Roms/Asteroids.gb"); //works
+		//mem.loadRom("Roms/Boulder Dash (U) [!].gb");//works
+		// mem.loadRom("Roms/Missile Command (U) [M][!].gb");//works
+		// mem.loadRom("Roms/Motocross Maniacs (E) [!].gb");//blank screen, doesnt start
+		//mem.loadRom("Roms/Amida (J).gb");//works but crappy game
+		// mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging and flickers like mad
+		//mem.loadRom("Roms/Boxxle (U) (V1.1) [!].gb");//works, 8x16 mode glitch
+		//mem.loadRom("Roms/Super Mario Land (V1.1) (JUA) [!].gb");//works, sligthy glitch (vlbank?)
 		//mem.loadRom("Roms/Super Mario Land 3 - Warioland (JUE) [!].gb");//not supported	
 		
 		// CPU INSTRUCTION TESTS - ALL PASSED
@@ -94,9 +98,9 @@ public class RunGB implements ApplicationListener {
 		// mem.loadRom("Testroms/testgb/PUZZLE.GB");
 		// mem.loadRom("Testroms/testgb/RPN.GB");
 		// mem.loadRom("Testroms/testgb/SOUND.GB");
-		// mem.loadRom("Testroms/testgb/SPACE.GB");
-		// mem.loadRom("Testroms/testgb/SPRITE.GB");
-		// mem.loadRom("Testroms/testgb/TEST.GB");
+		//mem.loadRom("Testroms/testgb/SPACE.GB");
+		// mem.loadRom("Testroms/testgb/SPRITE.GB");//works
+		//mem.loadRom("Testroms/testgb/TEST.GB");
 
 		// IRQ
 		// mem.loadRom("Testroms/irq/IRQ Demo (PD).gb");
@@ -132,6 +136,7 @@ public class RunGB implements ApplicationListener {
 	}
 
 	private final int[][] bg = new int[256][256];
+	private final int[][] spr = new int[64][80];
 
 	private void doDebugVram() {
 		for (int y = 0; y < 256 / 8; y++) {
@@ -147,6 +152,32 @@ public class RunGB implements ApplicationListener {
 			}
 		}
 		map.refresh(bg);
+	}
+
+	private void doDebugSpr() {
+		for (int i = 0; i < 40; i++) { // 8x4
+			int spry = (mem.readByte(i * 4 + 0xFE00) & 0xff);
+			int sprx = (mem.readByte(i * 4 + 1 + 0xFE00) & 0xff);
+			byte sprid = mem.readByte(i * 4 + 2 + 0xFE00);
+			byte attr = mem.readByte(i * 4 + 3 + 0xFE00);
+			boolean hidden = false;
+			if (sprx <= 0 || sprx >= 168 || spry <= 0 || spry >= 144) {
+				hidden = true;
+			}
+			for (int z = 0; z < 8; z++) {
+				int[] data = gpu.get8spr(z, sprid, attr);
+
+				for (int w = 0; w < 8; w++) {
+					spr[i % 8 * 8 + w][i / 8 * 16 + z] = data[w];
+				}
+				if(hidden){
+					spr[i % 8 * 8 + z][i / 8 * 16 + z] = 0xFF0000FF;
+				}
+			}
+			// test hidden
+
+		}
+		sprshow.refresh(spr);
 	}
 
 	@Override
@@ -170,9 +201,12 @@ public class RunGB implements ApplicationListener {
 		}
 
 		doDebugVram();
+		doDebugSpr();
+
 		screen.refresh(gpu.videobuffer);
 		map.refresh(bg);
 
+		int sprzoom = 2;
 		int h = Gdx.graphics.getHeight();
 		int w = Gdx.graphics.getWidth();
 		float fontoffset = font.getCapHeight() - font.getDescent();
@@ -187,9 +221,12 @@ public class RunGB implements ApplicationListener {
 		}
 		font.draw(batch, "Background map", w - 300, h - 300 + 256 + fontoffset);
 		font.draw(batch, "Gameboy screen: 160x144, 2x zoom", 50, 50 + 144 * 2 + fontoffset);
+		font.draw(batch, "Sprites", w - 300, h - 500 + 80 * sprzoom + fontoffset);
 
 		screen.drawStraight(batch, 50, 50, 0, 0, 160, 144, 2, 2, 0, 0, 0, 160, 144);
 		map.drawStraight(batch, w - 300, h - 300, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
+		sprshow.drawStraight(batch, w - 300, h - 500, 0, 0, 64, 80, sprzoom, sprzoom, 0, 0, 0, 64, 80);
+
 		batch.end();
 
 		// timedDebug(15);
@@ -221,6 +258,7 @@ public class RunGB implements ApplicationListener {
 		fadeoutFont.dispose();
 		screen.dispose();
 		map.dispose();
+		sprshow.dispose();
 	}
 
 }

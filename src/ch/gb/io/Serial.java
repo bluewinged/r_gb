@@ -1,6 +1,5 @@
 package ch.gb.io;
 
-import ch.gb.utils.Utils;
 
 public class Serial implements IOport {
 	public static final int SB = 0xFF01;
@@ -14,10 +13,10 @@ public class Serial implements IOport {
 	public void write(int add, byte b) {
 		if (add == SB) {
 			tmp[0] = serialtransferdata = b;
-			System.out.print(Utils.decASCII(tmp)); // HOLY SHIT
+			//System.out.print(Utils.decASCII(tmp)); // HOLY SHIT
 		} else if (add == SC) {
 			if (b == 0x81) {
-				System.out.print(Utils.decASCII(tmp));
+				//System.out.print(Utils.decASCII(tmp));
 				serialtransfercontrol = 1; // transfer "finished"
 			}
 		} else {
