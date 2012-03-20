@@ -10,7 +10,7 @@ public class Joypad implements IOport, InputProcessor {
 	public final static int P1 = 0xff00;
 
 	private int joy8 = 0xff;// all buttons mapped as 4 and 4 bits
-	private byte selection;
+	private byte selection = 0x3F;
 
 	private final MemoryManager mem;
 
@@ -20,24 +20,31 @@ public class Joypad implements IOport, InputProcessor {
 
 	@Override
 	public void write(int add, byte b) {
+		//System.out.println("happens");
 		// select buttons or direction pad
-		selection &=0xCF;
-		selection|= (b & 0x30);
+		selection &= 0xCF;
+		selection |= (b & 0x30);
 	}
 
 	@Override
 	public byte read(int add) {
-
+		//System.out.println("hthattooappens");
 		if ((selection & 0x20) == 0) {
 			// select buttons
-			//System.out.println(selection | (joy8 >> 4 & 0xf));
-			return (byte) (selection | (joy8 >> 4 & 0xf));
-		
+			// System.out.println(Integer.toBinaryString(selection &
+			// (0x30|((joy8 >> 4) & 0xf))));
+			return (byte) (selection & (0x30 | ((joy8 >> 4) & 0xf)));
+
 		} else if ((selection & 0x10) == 0) {
 			// select direction pad
-			return (byte) (selection | (joy8 & 0xf));
+			// System.out.println("faggy");
+			return (byte) (selection & (0x30 | (joy8 & 0xf)));
 		}
-		return (byte)(selection|0xf);
+		return (selection);
+	}
+
+	public void tick() {
+
 	}
 
 	// --------Libgdx Input processing ---------------------------
@@ -48,9 +55,15 @@ public class Joypad implements IOport, InputProcessor {
 		if (Settings.joymap.containsKey(keycode)) {
 			mem.requestInterrupt(CPU.JOYPAD_IR);
 			// clear corresponding bit
-			joy8 &= ~(1 << Settings.joymap.get(keycode));
+			int key = Settings.joymap.get(keycode);
+			joy8 &= ~(1 << key);
 
-			// System.out.println(Utils.dumpHex(joy8));
+			if (key > 3 && (selection & 0x20) == 0) { // = buttons
+				mem.requestInterrupt(CPU.JOYPAD_IR);
+			} else if (!(key > 3) && (selection & 0x10) == 0) {
+				mem.requestInterrupt(CPU.JOYPAD_IR);
+			}
+			// System.out.println("whatever");
 		}
 		return false;
 	}
@@ -58,8 +71,6 @@ public class Joypad implements IOport, InputProcessor {
 	@Override
 	public boolean keyUp(int keycode) {
 		if (Settings.joymap.containsKey(keycode)) {
-			mem.requestInterrupt(CPU.JOYPAD_IR);
-
 			// set corresponding bit
 			joy8 |= (1 << Settings.joymap.get(keycode));
 

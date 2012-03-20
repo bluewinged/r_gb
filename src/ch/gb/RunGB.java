@@ -44,40 +44,45 @@ public class RunGB implements ApplicationListener {
 		gpu = new GPU();
 		mem = new MemoryManager();
 
-		//@formatter:off
-		//GAMES
-		//mem.loadRom("Roms/Tetris.gb");
-		mem.loadRom("Roms/Asteroids.gb");
-		//mem.loadRom("Roms/Boulder Dash (U) [!].gb");
-		//mem.loadRom("Roms/Missile Command (U) [M][!].gb");
-		//mem.loadRom("Roms/Motocross Maniacs (E) [!].gb");
-		//mem.loadRom("Roms/Amida (J).gb");
-		//mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging
-		//mem.loadRom("Roms/Boxxle (U) (V1.1) [!].gb");
-		
+		// @formatter:off
+		// GAMES
+		mem.loadRom("Roms/Tetris.gb");//FUCKING HELL YES IT WORKS GODDAMNIT OMGWTFBBQ
+		// mem.loadRom("Roms/Asteroids.gb");
+		// mem.loadRom("Roms/Boulder Dash (U) [!].gb");
+		// mem.loadRom("Roms/Missile Command (U) [M][!].gb");
+		 //mem.loadRom("Roms/Motocross Maniacs (E) [!].gb");
+		// mem.loadRom("Roms/Amida (J).gb");
+		// mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging
+		// mem.loadRom("Roms/Boxxle (U) (V1.1) [!].gb");
 		//mem.loadRom("Roms/Super Mario Land (V1.1) (JUA) [!].gb");
+		//mem.loadRom("Roms/Super Mario Land 3 - Warioland (JUE) [!].gb");//not supported	
 		
-		//CPU INSTRUCTION TESTS - ALL PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/01-special.gb");//PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/02-interrupts.gb"); //FAILED #5 Halt sucks
-		//mem.loadRom("Testroms/cpu_instrs/individual/03-op sp,hl.gb");// PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/04-op r,imm.gb");//PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/06-ld r,r.gb");//PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb");//PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/08-misc instrs.gb");//PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/09-op r,r.gb");// PASSED
-		//mem.loadRom("Testroms/cpu_instrs/individual/10-bit ops.gb");// PASSED FUCK YEAH
-		//mem.loadRom("Testroms/cpu_instrs/individual/11-op a,(hl).gb");// PASSED
-		//mem.loadRom("Testroms/cpu_instrs/cpu_instrs.gb");// passed except #5
+		// CPU INSTRUCTION TESTS - ALL PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/01-special.gb");//PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/02-interrupts.gb");
+		// //FAILED #5 Halt sucks
+		// mem.loadRom("Testroms/cpu_instrs/individual/03-op sp,hl.gb");//
 		
-		//CPU TIMING TESTS - ALL UNTESTED
+		// PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/04-op r,imm.gb");//PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/06-ld r,r.gb");//PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb");//PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/08-misc instrs.gb");//PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/09-op r,r.gb");// PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/10-bit ops.gb");// PASSED
+		// mem.loadRom("Testroms/cpu_instrs/individual/11-op a,(hl).gb");//
+		
+		// PASSED
+		// mem.loadRom("Testroms/cpu_instrs/cpu_instrs.gb");// passed except #5
+
+		// CPU TIMING TESTS - ALL UNTESTED
 		//mem.loadRom("Testroms/instr_timing/instr_timing.gb");
-		
-		//CPU MEM TIMING
-		//mem.loadRom("Testroms/mem_timing/individual/01-read_timing.gb");
-		//mem.loadRom("Testroms/mem_timing/individual/02-write_timing.gb");
-		//mem.loadRom("Testroms/mem_timing/individual/03-modify_timing.gb");
-		//@formatter:on
+
+		// CPU MEM TIMING
+		// mem.loadRom("Testroms/mem_timing/individual/01-read_timing.gb");
+		// mem.loadRom("Testroms/mem_timing/individual/02-write_timing.gb");
+		// mem.loadRom("Testroms/mem_timing/individual/03-modify_timing.gb");
+		// @formatter:on
 
 		// GRAPHICS
 		// mem.loadRom("Testroms/graphicskev/gbtest.gb");
@@ -97,8 +102,9 @@ public class RunGB implements ApplicationListener {
 		// mem.loadRom("Testroms/irq/IRQ Demo (PD).gb");
 
 		// JOYPAD
-		// mem.loadRom("Testroms/joypad/Joypad Test V0.1 (PD).gb");
-		// mem.loadRom("Testroms/joypad/You Pressed Demo (PD).gb");
+		// mem.loadRom("Testroms/joypad/Joypad Test V0.1 (PD).gb");//PASSED
+		// mem.loadRom("Testroms/joypad/You Pressed Demo (PD).gb");//graphic
+		// bugged, input passed
 
 		// Scrolling
 		// mem.loadRom("Testroms/scroll/Scroll Test Dungeon (PD) [C].gbc");//not
@@ -108,6 +114,7 @@ public class RunGB implements ApplicationListener {
 		// mem.loadRom("Testroms/demos/99 Demo (PD) [C].gbc");// MBC 5 goddamnit
 		// mem.loadRom("Testroms/demos/Filltest Demo (PD).gb"); //Works
 		// mem.loadRom("Testroms/demos/Paint Demo (PD).gb");
+		// mem.loadRom("Testroms/demos/Big Scroller Demo (PD).gb");//works
 
 		comps.cpu = cpu;
 		comps.mem = mem;
@@ -115,7 +122,7 @@ public class RunGB implements ApplicationListener {
 		comps.link();
 
 		cpu.reset();
-		// cpu.DEBUG_ENABLED=true;
+		// cpu.DEBUG_ENABLED = true;
 	}
 
 	@Override

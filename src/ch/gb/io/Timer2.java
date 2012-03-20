@@ -3,7 +3,7 @@ package ch.gb.io;
 import ch.gb.cpu.CPU;
 import ch.gb.mem.MemoryManager;
 
-public class Timer implements IOport {
+public class Timer2 implements IOport {
 	public static final int DIV = 0xff04;
 	public static final int TIMA = 0xff05;
 	public static final int TMA = 0xff06;
@@ -21,53 +21,45 @@ public class Timer implements IOport {
 	private final int period262144hz = 16;
 	private int divcounter = period65536hz;
 	private int timercounter = period4096hz;
-	
-	private static final int timaClock[] = { 10, 4, 6, 8 };
-	
+
+
 	private final MemoryManager mem;
 
-	public Timer(MemoryManager mem) {
+	public Timer2(MemoryManager mem) {
 		this.mem = mem;
 	}
 
 	public void clock(int cpucycles) {
-		// divider reg
-		divcounter -= cpucycles;
-		while (divcounter <= 0) {
-			divcounter = period65536hz + divcounter;// in case already far < 0
+		divcounter +=cpucycles;
+		if(divcounter>=256){
 			div++;
+			divcounter -=256;
 		}
-
-		// timer reg
-		if ((tac & 4) == 4) {// timer enabled
-			timercounter -= cpucycles;
-
-			while (timercounter <= 0) {
-				timercounter = getFreq() + timercounter;
-				tima++;
-				if (tima > 0xFF) {
-					tima = tma & 0xff;
-					mem.requestInterrupt(CPU.TIMER_IR);
-				}
-
+		
+		if((tac&4)>0){
+			timercounter+=cpucycles;
+			int selectclock = tac&03;
+			if(selectclock==0 && timercounter >=1024){
+				tima+=1;
+				timercounter -=1024;
+			}else if(selectclock==1 && timercounter >=16){
+				tima +=1;
+				timercounter -=16;
+			}else if(selectclock==2&& timercounter >=64){
+				tima+=1;
+				timercounter -=64;
+			}else if(selectclock==3&&timercounter >=256){
+				tima+=1;
+				timercounter-=256;
+			}
+			
+			if(tima>=0x100){
+				tima = tma&0xff;
+				mem.requestInterrupt(CPU.TIMER_IR);
 			}
 		}
 	}
 
-	private int getFreq() {
-		switch (tac & 3) {
-		case 0:
-			return period4096hz;
-		case 1:
-			return period262144hz;
-		case 2:
-			return period65536hz;
-		case 3:
-			return period16384hz;
-		}
-		throw new RuntimeException("Reloading Timer failed" + (tac & 3));// cant
-																			// happen
-	}
 
 	@Override
 	public void write(int add, byte b) {
@@ -78,12 +70,7 @@ public class Timer implements IOport {
 		} else if (add == TMA) {
 			tma = b;
 		} else if (add == TAC) {
-			int freqold = tac & 3;
-			tac = (byte)(b&7);
-			int freqnew = tac & 3;
-			if (freqold != freqnew) {
-				timercounter = getFreq();
-			}
+			tac =(byte)(b&7);
 		}
 	}
 
@@ -92,7 +79,6 @@ public class Timer implements IOport {
 		if (add == DIV) {
 			return div;
 		} else if (add == TIMA) {
-			//System.out.println("forrealcall:"+tima);
 			return (byte) tima;
 		} else if (add == TMA) {
 			return tma;

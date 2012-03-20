@@ -147,21 +147,19 @@ public class GPU implements Component {
 			throw new RuntimeException("GPU->couldnt decode address:" + Utils.dumpHex(add) + " (Read)");
 		}
 	}
-
 	/**
 	 * 160x144 pixels to draw
 	 * 
 	 * @param cpucycles
 	 */
 	public void tick(int cpucycles) {
-
+		
 		if (!lcdEnabled) {
 			scanlinecyc = 456;
 			ly = 0;
 			mode = 1;
 		} else {
 			int oldMode = mode;
-
 			// mode 0: 204 cycles
 			// mode 1:4560 cycles
 			// mode 2: 80 cycles
@@ -192,6 +190,7 @@ public class GPU implements Component {
 		if (!lcdEnabled)
 			return;
 
+		
 		scanlinecyc -= cpucycles;
 		if (scanlinecyc <= 0) {
 			scanlinecyc = 456 + scanlinecyc; // adjust if taken too many

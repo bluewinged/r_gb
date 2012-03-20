@@ -192,12 +192,12 @@ public class MemoryManager implements Component {
 				return gpu.read(add);
 			} else if (add >= 0xFF00 && add <= 0xFF07) {
 				// io port map
-				io.get(add).read(add);
+				return io.get(add).read(add);
 			} else {
 				System.out.println("MemManager-> couldnt map read@ioports" + Utils.dumpHex(add));
 				return 0;
 			}
-			return 0;
+			//return 0;
 		}  else if (add < 0xFFFF) {
 			// HRAM
 			return hram[add - 0xFF80];
