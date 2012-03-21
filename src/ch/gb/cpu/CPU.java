@@ -78,45 +78,30 @@ public class CPU implements Component {
 	private Instr[] nInstr;// normal
 	private Instr[] eInstr;// extended
 
-	private static final int[] nCycles = { 1, 3, 2, 2, 1, 1, 2, 1, 5, 2, 2, 2,
-			1, 1, 2, 1, 0, 3, 2, 2, 1, 1, 2, 1, 3, 2, 2, 2, 1, 1, 2, 1, 2, 3,
-			2, 2, 1, 1, 2, 1, 2, 2, 2, 2, 1, 1, 2, 1, 2, 3, 2, 2, 3, 3, 3, 1,
-			2, 2, 2, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1,
-			2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
-			1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 2, 2, 0, 2, 1, 1,
-			1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1,
-			1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1,
-			2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
-			1, 1, 2, 1, 2, 3, 3, 4, 3, 4, 2, 4, 2, 4, 3, 0, 3, 6, 2, 4, 2, 3,
-			3, 0, 3, 4, 2, 4, 2, 4, 3, 0, 3, 0, 2, 4, 3, 3, 2, 0, 0, 4, 2, 4,
-			4, 1, 4, 0, 0, 0, 2, 4, 3, 3, 2, 1, 0, 4, 2, 4, 3, 2, 4, 1, 0, 0,
-			2, 4 };
-	private static final int[] eCycles = { 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2,
-			2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2,
-			2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2,
-			2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2,
-			3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2,
-			2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2,
-			2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2,
-			2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2,
-			4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2,
-			2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2,
-			2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2,
-			2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2,
-			4, 2 };
-	private static final int[] nCyclesTaken = { 1, 3, 2, 2, 1, 1, 2, 1, 5, 2,
-			2, 2, 1, 1, 2, 1, 0, 3, 2, 2, 1, 1, 2, 1, 3, 2, 2, 2, 1, 1, 2, 1,
-			3, 3, 2, 2, 1, 1, 2, 1, 3, 2, 2, 2, 1, 1, 2, 1, 3, 3, 2, 2, 3, 3,
-			3, 1, 3, 2, 2, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
-			1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1,
-			1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 2, 2, 0, 2,
-			1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1,
-			2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
-			1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1,
-			1, 1, 1, 1, 2, 1, 5, 3, 4, 4, 6, 4, 2, 4, 5, 4, 4, 0, 6, 6, 2, 4,
-			5, 3, 4, 0, 6, 4, 2, 4, 5, 4, 4, 0, 6, 0, 2, 4, 3, 3, 2, 0, 0, 4,
-			2, 4, 4, 1, 4, 0, 0, 0, 2, 4, 3, 3, 2, 1, 0, 4, 2, 4, 3, 2, 4, 1,
-			0, 0, 2, 4 };
+	private static final int[] nCycles = { 1, 3, 2, 2, 1, 1, 2, 1, 5, 2, 2, 2, 1, 1, 2, 1, 0, 3, 2, 2, 1, 1, 2, 1, 3,
+			2, 2, 2, 1, 1, 2, 1, 2, 3, 2, 2, 1, 1, 2, 1, 2, 2, 2, 2, 1, 1, 2, 1, 2, 3, 2, 2, 3, 3, 3, 1, 2, 2, 2, 2, 1,
+			1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1,
+			1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 2, 2, 0, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1,
+			1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1,
+			1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 3, 3, 4, 3, 4, 2, 4, 2, 4, 3, 0, 3,
+			6, 2, 4, 2, 3, 3, 0, 3, 4, 2, 4, 2, 4, 3, 0, 3, 0, 2, 4, 3, 3, 2, 0, 0, 4, 2, 4, 4, 1, 4, 0, 0, 0, 2, 4, 3,
+			3, 2, 1, 0, 4, 2, 4, 3, 2, 4, 1, 0, 0, 2, 4 };
+	private static final int[] eCycles = { 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2,
+			2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2,
+			2, 4, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2,
+			2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2,
+			2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2,
+			2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2,
+			2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2, 2,
+			2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 2, 4, 2 };
+	private static final int[] nCyclesTaken = { 1, 3, 2, 2, 1, 1, 2, 1, 5, 2, 2, 2, 1, 1, 2, 1, 0, 3, 2, 2, 1, 1, 2, 1,
+			3, 2, 2, 2, 1, 1, 2, 1, 3, 3, 2, 2, 1, 1, 2, 1, 3, 2, 2, 2, 1, 1, 2, 1, 3, 3, 2, 2, 3, 3, 3, 1, 3, 2, 2, 2,
+			1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1,
+			1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 2, 2, 0, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
+			1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1,
+			1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 5, 3, 4, 4, 6, 4, 2, 4, 5, 4, 4, 0,
+			6, 6, 2, 4, 5, 3, 4, 0, 6, 4, 2, 4, 5, 4, 4, 0, 6, 0, 2, 4, 3, 3, 2, 0, 0, 4, 2, 4, 4, 1, 4, 0, 0, 0, 2, 4,
+			3, 3, 2, 1, 0, 4, 2, 4, 3, 2, 4, 1, 0, 0, 2, 4 };
 
 	private int consumedCycles;
 
@@ -138,18 +123,16 @@ public class CPU implements Component {
 			if ((opcode & 0xff) == 0xCB) {
 				int np = mem.readByte(pc++) & 0xff;
 
-				if (DEBUG_ENABLED){
+				if (DEBUG_ENABLED) {
 					byte b2 = mem.readByte(pc);
 					byte b3 = mem.readByte(pc + 1);
-					debuginf = "PC:" + Utils.dumpHex(debugpc) + "  "
-							+ Disassembler.disassemble(opcode, b2, b3) + "  "
-							+ "   AF:" + Utils.dumpHex(rd16reg(RG_AF))
-							+ "   BC:" + Utils.dumpHex(rd16reg(RG_BC))
-							+ "   DE:" + Utils.dumpHex(rd16reg(RG_DE))
-							+ "   HL:" + Utils.dumpHex(rd16reg(RG_HL))
+					debuginf = "PC:" + Utils.dumpHex(debugpc) + "  " + Disassembler.disassemble(opcode, b2, b3) + "  "
+							+ "   AF:" + Utils.dumpHex(rd16reg(RG_AF)) + "   BC:" + Utils.dumpHex(rd16reg(RG_BC))
+							+ "   DE:" + Utils.dumpHex(rd16reg(RG_DE)) + "   HL:" + Utils.dumpHex(rd16reg(RG_HL))
 							+ "   SP:" + Utils.dumpHex(rd16reg(RG_SP));
 				}
 				consumedCycles += eCycles[np] * 4;// machine -> clock cycles
+				consumedCycles += 4;// 0xCB
 				eInstr[np].compile();
 
 			} else {
@@ -158,16 +141,13 @@ public class CPU implements Component {
 				if (DEBUG_ENABLED) {
 					byte b2 = mem.readByte(pc);
 					byte b3 = mem.readByte(pc + 1);
-					debuginf = "PC:" + Utils.dumpHex(debugpc) + "  "
-							+ Disassembler.disassemble(opcode, b2, b3) + "  "
-							+ "   AF:" + Utils.dumpHex(rd16reg(RG_AF))
-							+ "   BC:" + Utils.dumpHex(rd16reg(RG_BC))
-							+ "   DE:" + Utils.dumpHex(rd16reg(RG_DE))
-							+ "   HL:" + Utils.dumpHex(rd16reg(RG_HL))
+					debuginf = "PC:" + Utils.dumpHex(debugpc) + "  " + Disassembler.disassemble(opcode, b2, b3) + "  "
+							+ "   AF:" + Utils.dumpHex(rd16reg(RG_AF)) + "   BC:" + Utils.dumpHex(rd16reg(RG_BC))
+							+ "   DE:" + Utils.dumpHex(rd16reg(RG_DE)) + "   HL:" + Utils.dumpHex(rd16reg(RG_HL))
 							+ "   SP:" + Utils.dumpHex(rd16reg(RG_SP));
 				}
 				consumedCycles += nCycles[opcode & 0xff] * 4;// machine -> clock
-															// cycles
+																// cycles
 				nInstr[opcode & 0xff].compile();
 
 			}
@@ -192,8 +172,8 @@ public class CPU implements Component {
 					irq &= 0xFE;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_VBLANK;
-					//consumedCycles+=22;
-					//System.out.println("TIMA SHOWS:"+Utils.dumpHex((mem.readByte(Timer.TIMA)+5)&0xff));
+					// consumedCycles+=22;
+					// System.out.println("TIMA SHOWS:"+Utils.dumpHex((mem.readByte(Timer.TIMA)+5)&0xff));
 					return;
 				} else if ((irq & 2) == 2 && (ie & 2) == 2) {
 					// LCD
@@ -202,7 +182,7 @@ public class CPU implements Component {
 					irq &= 0xFD;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_LCD;
-					//consumedCycles+=22;
+					// consumedCycles+=22;
 					return;
 				} else if ((irq & 4) == 4 && (ie & 4) == 4) {
 					// Timer
@@ -211,7 +191,7 @@ public class CPU implements Component {
 					irq &= 0xFB;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_TIMER;
-					//consumedCycles+=22;
+					// consumedCycles+=22;
 					return;
 				} else if ((irq & 8) == 8 && (ie & 8) == 8) {
 					// Serial
@@ -220,7 +200,7 @@ public class CPU implements Component {
 					irq &= 0xF7;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_SERIAL;
-					//consumedCycles+=22;
+					// consumedCycles+=22;
 					return;
 				} else if ((irq & 0x10) == 0x10 && (ie & 0x10) == 0x10) {
 					// Joypad
@@ -229,7 +209,7 @@ public class CPU implements Component {
 					irq &= 0xEF;
 					mem.writeByte(IF_REG, irq);
 					pc = VEC_JOY;
-					//consumedCycles+=22;
+					// consumedCycles+=22;
 					return;
 				}
 			}
@@ -316,8 +296,7 @@ public class CPU implements Component {
 			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
-					regs[reg] = mem
-							.readByte(0xFF00 + (mem.readByte(pc++) & 0xff));
+					regs[reg] = mem.readByte(0xFF00 + (mem.readByte(pc++) & 0xff));
 				}
 			};
 		}
@@ -326,8 +305,7 @@ public class CPU implements Component {
 			return new Instr(cpu, "LDA  ") {
 				@Override
 				void compile() {
-					mem.writeByte(0xFF00 + (mem.readByte(pc++) & 0xff),
-							regs[reg]);
+					mem.writeByte(0xFF00 + (mem.readByte(pc++) & 0xff), regs[reg]);
 				}
 			};
 		}
@@ -613,8 +591,7 @@ public class CPU implements Component {
 						result = ++regs[ldtype];
 					} else {// HL inc
 						int addr = rd16reg(RG_HL);
-						mem.writeByte(addr,
-								(result = (byte) (mem.readByte(addr) + 1)));
+						mem.writeByte(addr, (result = (byte) (mem.readByte(addr) + 1)));
 					}
 					if (result == 0) {
 						regs[RG_F] |= 0xA0;// Z and H flag
@@ -636,8 +613,7 @@ public class CPU implements Component {
 						result = --regs[ldtype];
 					} else {// HL inc
 						int addr = rd16reg(RG_HL);
-						mem.writeByte(addr,
-								(result = (byte) (mem.readByte(addr) - 1)));
+						mem.writeByte(addr, (result = (byte) (mem.readByte(addr) - 1)));
 					}
 					if (result == 0)
 						regs[RG_F] |= Z;
@@ -655,8 +631,7 @@ public class CPU implements Component {
 			} else if (reg == LDType.byHL) {
 				return mem.readByte(rd16reg(RG_HL));
 			} else {
-				throw new RuntimeException(
-						"private method _load_ received value above 9");
+				throw new RuntimeException("private method _load_ received value above 9");
 			}
 		}
 
@@ -1215,8 +1190,7 @@ public class CPU implements Component {
 	}
 
 	int rd16reg(int reg) {
-		return reg == 8 ? sp & 0xffff : (regs[reg] << 8 & 0xff00)
-				| (regs[reg + 1] & 0xff);
+		return reg == 8 ? sp & 0xffff : (regs[reg] << 8 & 0xff00) | (regs[reg + 1] & 0xff);
 	}
 
 	void inc16re(int reg) {
@@ -1275,18 +1249,17 @@ public class CPU implements Component {
 	public void link(GBComponents comps) {
 		this.mem = comps.mem;
 	}
-
+	/**
+	 * Perform this reset last
+	 */
 	@Override
 	public void reset() {
+		ime = true;
 		pc = 0x100;
 		wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
 		wr16reg(RG_BC, 0x0013);
 		wr16reg(RG_DE, 0x00D8);
 		wr16reg(RG_HL, 0x014D);
-		// wr16reg(RG_AF, 0x1180);// for GBC its 0x11B0
-		// wr16reg(RG_BC, 0x0000);
-		// wr16reg(RG_DE, 0xFF56);
-		// wr16reg(RG_HL, 0x000D);
 
 		sp = 0xFFFE;
 		mem.writeByte(0xFF05, (byte) 0x00);// TIMA

@@ -1,9 +1,12 @@
 package ch.gb.mem;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.HashMap;
 
 import ch.gb.Component;
 import ch.gb.GBComponents;
+import ch.gb.Settings;
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
 import ch.gb.io.IOport;
@@ -14,6 +17,7 @@ import ch.gb.io.Timer;
 import ch.gb.utils.Utils;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.files.FileHandle;
 
 /**
  * Contains CPU memory and manages all writes to it
@@ -27,15 +31,13 @@ public class MemoryManager implements Component {
 	public static final int SC = 0xFF02;
 	public static final int KEY1 = 0xFF4D;
 
-	private final byte[] tmp = new byte[1];
-
 	public byte[][] rombanks; // 2 x 16kB
 	public byte[] vram; // 1 x 8kB , switchable in GBC
-	public byte[][] exram;// 8kB external Ram, splitted int 4 x 2kB
-	private final byte[] wram0; // 4kB
+	public byte[] exram;// 8kB external Ram
+	private byte[] wram0; // 4kB
 	public byte[] wram1; // 4kB, switchable in GBC
-	private final byte[] oam;// 0xA0 bytes OAM
-	private final byte[] hram;// 0x80 bytes high ram
+	private byte[] oam;// 0xA0 bytes OAM
+	private byte[] hram;// 0x80 bytes high ram
 	private byte interruptEnableReg;
 	private byte irqReg;
 
@@ -45,18 +47,25 @@ public class MemoryManager implements Component {
 	private CPU cpu;
 	private GPU gpu;
 
-	private String romInfo="";
+	private String romInfo = "";
 	// more IO
-	private final Timer timer;
-	private final Serial serial;
-	private final Joypad joy;
-	private final SpriteDma sprdma;
-	private final HashMap<Integer, IOport> io;
+	private Timer timer;
+	private Serial serial;
+	private Joypad joy;
+	private SpriteDma sprdma;
+	private HashMap<Integer, IOport> io;
+
+	private Rom rom;
 
 	public MemoryManager() {
+		reset();
+	}
+
+	@Override
+	public void reset() {
 		rombanks = new byte[2][0x4000];
 		vram = new byte[0x2000];
-		exram = new byte[4][0x800];
+		exram = new byte[0x2000];
 		wram0 = new byte[0x2000];
 		wram1 = new byte[0x2000];
 		oam = new byte[0xA0];
@@ -97,7 +106,7 @@ public class MemoryManager implements Component {
 			vram[add - 0x8000] = b;
 		} else if (add < 0xC000) {
 			// 8kB exram
-			exram[(add - 0xA000) / 0x800][add % 0x800] = b;
+			exram[(add - 0xA000)] = b;
 		} else if (add < 0xD000) {
 			// 4kB WRAM 0
 			wram0[add - 0xC000] = b;
@@ -113,7 +122,8 @@ public class MemoryManager implements Component {
 			oam[add - 0xFE00] = b;
 		} else if (add < 0xFF00) {
 			// empty and unusable
-			//System.out.println("MemManager-> couldnt map write@empty" + Utils.dumpHex(add)+"->"+Utils.dumpHex(b));
+			// System.out.println("MemManager-> couldnt map write@empty" +
+			// Utils.dumpHex(add)+"->"+Utils.dumpHex(b));
 		} else if (add < 0xFF80) {
 			// I/O ports
 			if (add == CPU.IF_REG) {
@@ -124,7 +134,7 @@ public class MemoryManager implements Component {
 
 			} else if (add == SpriteDma.OAM_DMA) {
 				sprdma.write(add, b);
-				//System.out.println("LAUNCHING DMA");
+				// System.out.println("LAUNCHING DMA");
 			} else if (add >= 0xFF10 && add <= 0xFF3F) {
 				// Sound
 
@@ -135,7 +145,8 @@ public class MemoryManager implements Component {
 				// io port map
 				io.get(add).write(add, b);
 			} else {
-				//System.out.println("MemManager-> couldnt map write@ioports" + Utils.dumpHex(add));
+				// System.out.println("MemManager-> couldnt map write@ioports" +
+				// Utils.dumpHex(add));
 			}
 		} else if (add < 0xFFFF) {
 			// HRAM
@@ -160,7 +171,7 @@ public class MemoryManager implements Component {
 			return vram[add - 0x8000];
 		} else if (add < 0xC000) {
 			// 8kB EXRAM
-			return exram[(add - 0xA000) / 4][add % 0x800];
+			return exram[(add - 0xA000)];
 		} else if (add < 0xD000) {
 			// 4kB WRAM 0
 			return wram0[add - 0xC000];
@@ -197,15 +208,16 @@ public class MemoryManager implements Component {
 				System.out.println("MemManager-> couldnt map read@ioports" + Utils.dumpHex(add));
 				return 0;
 			}
-			//return 0;
-		}  else if (add < 0xFFFF) {
+			// return 0;
+		} else if (add < 0xFFFF) {
 			// HRAM
 			return hram[add - 0xFF80];
 		} else {
 			// interrupt enable register
 			return interruptEnableReg;
 		}
-		//throw new RuntimeException("Couldnt decode Address:" + Utils.dumpHex(add));
+		// throw new RuntimeException("Couldnt decode Address:" +
+		// Utils.dumpHex(add));
 	}
 
 	public void write2Byte(int add, int s) {
@@ -234,13 +246,42 @@ public class MemoryManager implements Component {
 	}
 
 	public void loadRom(String path) {
-		Rom rom = new Rom(path);
+		rom = new Rom(path);
 		System.out.println(rom.getInformation());
 		romInfo = rom.getInformation();
-		
+
 		mbc = Mapper.createMBC(this, rom);
 	}
-	public String getRomInfo(){
+
+	public void saveRam() {
+		if (rom != null && mbc != null) {
+			if (mbc.getNumRamBanks() == 0 || !mbc.hasSramOrBattery()) {
+				return;
+			}
+			String filename = rom.getLoadPath();
+			String[] splits = filename.split("/");
+			filename = Utils.removeExtension(splits[splits.length - 1]);
+			filename += ".sav";
+
+			FileHandle filehandle = Gdx.files.external(Settings.root + filename);
+
+			// Gdx.files.external
+			OutputStream os = filehandle.write(false);
+			try {
+				for (int i = 0; i < mbc.getNumRamBanks(); i++) {
+					os.write(mbc.getRam()[i]);
+				}
+				os.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			System.out.println("Saved Ram in " + filename);
+			System.out.println("Path:" + filehandle.path() + " -> relative to user/<username>/");
+		}
+	}
+
+	public String getRomInfo() {
 		return romInfo;
 	}
 
@@ -251,8 +292,4 @@ public class MemoryManager implements Component {
 
 	}
 
-	@Override
-	public void reset() {
-
-	}
 }

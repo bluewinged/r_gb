@@ -7,6 +7,7 @@ import ch.gb.mem.MemoryManager;
 
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.GL10;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -32,6 +33,8 @@ public class RunGB implements ApplicationListener {
 	private OpenglDisplay sprshow;
 
 	private float fontalpha = 1.0f;
+
+	private final int speedupf = 10;
 
 	@Override
 	public void create() {
@@ -59,7 +62,11 @@ public class RunGB implements ApplicationListener {
 		// mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging and flickers like mad
 		//mem.loadRom("Roms/Boxxle (U) (V1.1) [!].gb");//works, 8x16 mode glitch
 		//mem.loadRom("Roms/Super Mario Land (V1.1) (JUA) [!].gb");//works, sligthy glitch (vlbank?)
-		//mem.loadRom("Roms/Super Mario Land 3 - Warioland (JUE) [!].gb");//not supported	
+		mem.loadRom("Roms/Super Mario Land 2 - 6 Golden Coins (UE) (V1.2) [!].gb");//
+		//mem.loadRom("Roms/Super Mario Land 3 - Warioland (JUE) [!].gb");//scanlines slightly glitchy
+		//mem.loadRom("Roms/Tetris 2 (UE) [S][!].gb");
+		//mem.loadRom("Roms/Legend of Zelda, The - Link's Awakening.gb");
+		//mem.loadRom("Roms/Pokemon Red (U) [S][!].gb");//y dude its MBC3 
 		
 		// CPU INSTRUCTION TESTS - ALL PASSED
 		// mem.loadRom("Testroms/cpu_instrs/individual/01-special.gb");//PASSED
@@ -98,9 +105,9 @@ public class RunGB implements ApplicationListener {
 		// mem.loadRom("Testroms/testgb/PUZZLE.GB");
 		// mem.loadRom("Testroms/testgb/RPN.GB");
 		// mem.loadRom("Testroms/testgb/SOUND.GB");
-		//mem.loadRom("Testroms/testgb/SPACE.GB");
+		// mem.loadRom("Testroms/testgb/SPACE.GB");
 		// mem.loadRom("Testroms/testgb/SPRITE.GB");//works
-		//mem.loadRom("Testroms/testgb/TEST.GB");
+		// mem.loadRom("Testroms/testgb/TEST.GB");
 
 		// IRQ
 		// mem.loadRom("Testroms/irq/IRQ Demo (PD).gb");
@@ -170,7 +177,7 @@ public class RunGB implements ApplicationListener {
 				for (int w = 0; w < 8; w++) {
 					spr[i % 8 * 8 + w][i / 8 * 16 + z] = data[w];
 				}
-				if(hidden){
+				if (hidden) {
 					spr[i % 8 * 8 + z][i / 8 * 16 + z] = 0xFF0000FF;
 				}
 			}
@@ -189,13 +196,15 @@ public class RunGB implements ApplicationListener {
 		if (hz60accu >= hz60tick) {
 			hz60accu -= hz60tick;
 
-			while (cpuacc < cyclesperframe) {
+			int framerate = Gdx.input.isKeyPressed(Keys.SPACE) ? cyclesperframe * speedupf : cyclesperframe;
+
+			while (cpuacc < framerate) {
 				int cycles = cpu.tick();
 				mem.clock(cycles);
 				gpu.tick(cycles);
 				cpuacc += cycles;
 			}
-			cpuacc -= cyclesperframe;
+			cpuacc -= framerate;
 			clock++;
 			fontalpha -= 0.003f;
 		}
@@ -216,7 +225,7 @@ public class RunGB implements ApplicationListener {
 		font.draw(batch, "FPS:" + Gdx.graphics.getFramesPerSecond(), 10, h - 10);
 		font.draw(batch, "bluew, 2012", 100, h - 10);
 		if (fontalpha > 0f) {
-			fadeoutFont.drawMultiLine(batch, mem.getRomInfo(), 50, h - 50);
+			fadeoutFont.drawMultiLine(batch, mem.getRomInfo(), 50, h - 30);
 			fadeoutFont.setColor(1f, 1f, 1f, (fontalpha > 0f ? fontalpha : 0f));
 		}
 		font.draw(batch, "Background map", w - 300, h - 300 + 256 + fontoffset);
@@ -259,6 +268,9 @@ public class RunGB implements ApplicationListener {
 		screen.dispose();
 		map.dispose();
 		sprshow.dispose();
+		
+		//write savegames
+		mem.saveRam();
 	}
 
 }

@@ -15,4 +15,21 @@ public class RomOnly extends Mapper {
 		// nothing happens
 	}
 
+	@Override
+	public int getNumRamBanks() {
+		return 0;
+		
+	}
+
+	@Override
+	public byte[][] getRam() {
+
+		return null;
+	}
+
+	@Override
+	public boolean hasSramOrBattery() {
+		return false;
+	}
+
 }

@@ -63,10 +63,36 @@ public class GPU implements Component {
 	private MemoryManager mem;
 	public int[][] videobuffer;
 
+
+
 	public GPU() {
 		videobuffer = new int[160][144];
 	}
-
+	@Override
+	public void reset() {
+		stat = 0;
+		mode = 0;
+		coincidence = 0;
+		scy = 0;
+		scx = 0;
+		ly = 0;
+		lyc = 0;
+		wx = 0;
+		wy = 0;
+		bgpraw = 0;
+		obp0raw = 0;
+		obp1raw = 0;
+		for (int i = 0; i < 4; i++) {
+			bgp[i] = 0;
+			obp[0][i] = 0;
+			obp[1][i] = 0;
+		}
+		for (int y = 0; y < 144; y++) {
+			for (int x = 0; x < 160; x++) {
+				videobuffer[x][y] = 0;
+			}
+		}
+	}
 	public void write(int add, byte b) {
 		if (add == LCD_C) {
 			lcdc = b;
@@ -222,7 +248,7 @@ public class GPU implements Component {
 		int bgEntry = bgTilemap + y / 8 * 32;// 20 tiles per scanline
 
 		for (int x = 0; x < 160; x++) {
-			int tx = (x + scx) % 256;
+			int tx = (x + scx) &0xff;
 
 			// fetch namtable byte
 			byte tileid = mem.readByte(bgEntry + tx / 8);
@@ -244,23 +270,23 @@ public class GPU implements Component {
 	public void drawSpr() {
 
 		for (int i = 0; i < 40; i++) {
-			int ypos = (mem.readByte(0xFE00 + i*4) & 0xff) -16;
-			int xpos = (mem.readByte(0xFE00 + i*4 + 1) & 0xff)-8 ;
-			int tileid = (mem.readByte(0xFE00 + i *4+ 2) & 0xff);
-			byte attr = mem.readByte(0xFE00 + i*4 + 3);
+			int ypos = (mem.readByte(0xFE00 + i * 4) & 0xff) - 16;
+			int xpos = (mem.readByte(0xFE00 + i * 4 + 1) & 0xff) - 8;
+			int tileid = (mem.readByte(0xFE00 + i * 4 + 2) & 0xff);
+			byte attr = mem.readByte(0xFE00 + i * 4 + 3);
 
 			// 8x8 mode
-			int priority = (attr >> 7) & 1;//TODO: not yet implemented
+			int priority = (attr >> 7) & 1;// TODO: not yet implemented
 			int yflip = (attr >> 6) & 1;
-			int xflip =(attr >> 5) & 1;
-			
+			int xflip = (attr >> 5) & 1;
+
 			int pal = (attr >> 4) & 1;
-			int size = spr8x16? 16:8; //16 mode works
-			
+			int size = spr8x16 ? 16 : 8; // 16 mode works
+
 			// clipping
-			if (ly >= ypos && ly < (ypos + size) ) {
+			if (ly >= ypos && ly < (ypos + size)) {
 				int line = (ly - ypos);
-				line = yflip == 1 ? 8 - line : line;
+				line = yflip == 1 ? 7 - line : line;
 
 				int patternentry = 0x8000 + tileid * 16 + line * 2;
 				byte lo = mem.readByte(patternentry);
@@ -269,11 +295,12 @@ public class GPU implements Component {
 				for (int x = 0; x < 8; x++) {
 
 					int newx = (xflip == 1 ? x : 7 - x);
-					int tx = xpos+ x;
+					int tx = xpos + x;
 
 					int palcolor = obp[pal][(lo >> (newx)) & 1 | ((hi >> (newx)) & 1) << 1];
 
-					if (tx >= 0 && tx < 160 && palcolor != 0) //sprites only have 3 colors
+					if (tx >= 0 && tx < 160 && palcolor != 0) // sprites only
+																// have 3 colors
 						videobuffer[tx][ly] = palette[palcolor];
 				}
 
@@ -329,12 +356,6 @@ public class GPU implements Component {
 	@Override
 	public void link(GBComponents comps) {
 		this.mem = comps.mem;
-
-	}
-
-	@Override
-	public void reset() {
-		// TODO Auto-generated method stub
 
 	}
 

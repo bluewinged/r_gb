@@ -1,32 +1,29 @@
 package ch.gb.utils;
 
+import java.io.File;
 import java.io.UnsupportedEncodingException;
 
 public class Utils {
-
 
 	public static boolean compare(int[] dump1, int[] dump2) {
 		return false;
 	}
 
 	public static void dumpMem(byte[] memory) {
-		dumpMem(memory,0);
+		dumpMem(memory, 0);
 	}
-	public static void dumpMem(byte[] memory, int offsetreduce){
+
+	public static void dumpMem(byte[] memory, int offsetreduce) {
 		System.out.println();
 		System.out.println("MEMORY DUMP OF:" + memory);
 		for (int i = 0; i < memory.length / 16; i++) {
 			int offset = 0x10 * i;
-			Utils.printStr(Utils.dumpHex(offset-offsetreduce)
+			Utils.printStr(Utils.dumpHex(offset - offsetreduce)
 					+ " "
-					+ Utils.dumpHex(memory[offset], memory[offset + 1],
-							memory[offset + 2], memory[offset + 3],
-							memory[offset + 4], memory[offset + 5],
-							memory[offset + 6], memory[offset + 7],
-							memory[offset + 8], memory[offset + 9],
-							memory[offset + 10], memory[offset + 11],
-							memory[offset + 12], memory[offset + 13],
-							memory[offset + 14], memory[offset + 15]));
+					+ Utils.dumpHex(memory[offset], memory[offset + 1], memory[offset + 2], memory[offset + 3],
+							memory[offset + 4], memory[offset + 5], memory[offset + 6], memory[offset + 7],
+							memory[offset + 8], memory[offset + 9], memory[offset + 10], memory[offset + 11],
+							memory[offset + 12], memory[offset + 13], memory[offset + 14], memory[offset + 15]));
 		}
 	}
 
@@ -36,19 +33,16 @@ public class Utils {
 		}
 		for (int i = 0; i < memory.length / 16; i++) {
 			int offset = 0x10 * i;
-			array[i] = (Utils.dumpHex(offset) + " " + Utils.dumpHex(
-					memory[offset], memory[offset + 1], memory[offset + 2],
-					memory[offset + 3], memory[offset + 4], memory[offset + 5],
-					memory[offset + 6], memory[offset + 7], memory[offset + 8],
-					memory[offset + 9], memory[offset + 10],
-					memory[offset + 11], memory[offset + 12],
-					memory[offset + 13], memory[offset + 14],
+			array[i] = (Utils.dumpHex(offset) + " " + Utils.dumpHex(memory[offset], memory[offset + 1],
+					memory[offset + 2], memory[offset + 3], memory[offset + 4], memory[offset + 5], memory[offset + 6],
+					memory[offset + 7], memory[offset + 8], memory[offset + 9], memory[offset + 10],
+					memory[offset + 11], memory[offset + 12], memory[offset + 13], memory[offset + 14],
 					memory[offset + 15]));
 		}
 	}
 
 	public static String dumpHex(byte hex) {
-		return String.format("%02X", hex&0xff);
+		return String.format("%02X", hex & 0xff);
 	}
 
 	public static String dumpHex(int word) {
@@ -65,8 +59,6 @@ public class Utils {
 		return String.format(format, tmp);
 	}
 
-
-
 	public static String decASCII(byte[] ascii) {
 		try {
 			return new String(ascii, 0, ascii.length, "ASCII");
@@ -79,5 +71,21 @@ public class Utils {
 
 	public static void printStr(String str) {
 		System.out.println(str);
+	}
+
+	public static String removeExtension(String in) {
+		int p = in.lastIndexOf(".");
+		if (p < 0)
+			return in;
+
+		int d = in.lastIndexOf(File.separator);
+
+		if (d < 0 && p == 0)
+			return in;
+
+		if (d >= 0 && d > p)
+			return in;
+
+		return in.substring(0, p);
 	}
 }

@@ -4,7 +4,7 @@ package ch.gb.io;
 public class Serial implements IOport {
 	public static final int SB = 0xFF01;
 	public static final int SC = 0xFF02;
-	private byte serialtransferdata;
+	private byte serialtransferdata=(byte)0xff;
 	private byte serialtransfercontrol;
 
 	private final byte tmp[] = new byte[1];

@@ -6,7 +6,7 @@ import com.badlogic.gdx.Input.Keys;
 
 public class Settings {
 	public static HashMap<Integer, Integer> joymap;
-
+	public static String root ="rgbsavegames/";
 	static {
 		// default Joypad mapping
 		// 7: start
