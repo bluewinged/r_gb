@@ -13,7 +13,7 @@ public class Square extends Channel {
 	private boolean envtriggered = true;
 
 	private int lc;
-	private boolean lcEnabled; // also channel enabled flag
+	private boolean lengthEnable; // also channel enabled flag (?)
 
 	private int sequencer;
 	private int sqsample;
@@ -24,6 +24,10 @@ public class Square extends Channel {
 		off = is2nd ? 5 : 0;
 	}
 
+	public void powerOn() {
+		sequencer = 0;
+	}
+
 	@Override
 	void write(int add, byte b) {
 		if (add == 0xFF10 + off) {
@@ -31,39 +35,51 @@ public class Square extends Channel {
 		} else if (add == 0xFF11 + off) {
 			nr1 = b;
 			duty = (b >> 6) & 3;
-			lc = b & 0x3f;
+			lc = 64 - (b & 0x3f);
 		} else if (add == 0xFF12 + off) {
 			nr2 = b;
 			envvol = (b >> 4) & 0xf;
 			envadd = (b & 8) == 8 ? 1 : -1;
 			envperiod = b & 3;
+			if ((b & 0xF8) == 0) { // check DAC
+				lengthEnable = false;
+			}
 		} else if (add == 0xFF13 + off) {
 			nr3 = b;
 			freq &= 0x700;
 			freq |= b;
 			period = (2048 - freq) * 4;
+
 		} else if (add == 0xFF14 + off) {
 			nr4 = b;
 			freq &= 0xff;
 			freq |= ((b & 7) << 8);
 			period = (2048 - freq) * 4;
-			lcEnabled = (b & 0x40) == 0x40;
-			if ((b & 0x80) == 0x80) {// trigger event
+
+			lengthEnable = (b & 0x40) == 0x40;
+
+			if ((b & 0x80) == 0x80) {// trigger
 				envtriggered = true;
-				lcEnabled = true;
-				nr4 |= 0x80;
+				lengthEnable = true;
 				if (lc == 0)
 					lc = 64;
-				divider = period;
+
+				divider = period;// TODO:low 2 bits are not modified
 				envperiod = nr2 & 3;// reload env period
 				envvol = (nr2 >> 4) & 0xf;// reload volume
 				// TODO: sweep does some stuff
+
+				if ((b & 0xF8) == 0) {// check DAC
+					lengthEnable = false;
+					lc = 0;
+				}
 			}
 		}
 	}
 
 	@Override
 	byte read(int add) {
+		// System.out.println("anything?"+Utils.dumpHex(add));
 		if (add == 0xFF10 + off) {
 			return off == 5 ? (byte) (nr0 | 0xff) : (byte) (nr0 | 0x80);
 		} else if (add == 0xFF11 + off) {
@@ -73,7 +89,8 @@ public class Square extends Channel {
 		} else if (add == 0xFF13 + off) {
 			return (byte) (nr3 | 0xff);
 		} else if (add == 0xFF14 + off) {
-			return (byte) (nr4 | 0xBF);
+			// System.out.println("pololo");
+			return (byte) (nr4 | 0xBF | (lengthEnable ? 0x40 : 0));
 		} else {
 			throw new RuntimeException("hurrdurr");
 		}
@@ -89,26 +106,35 @@ public class Square extends Channel {
 	}
 
 	void clocklen() {
-		if (lcEnabled && lc > 0)
+		if (lengthEnable && lc > 0)
 			lc--;
 		if (lc == 0) {
-			lcEnabled = false;
-			nr4 &= 0xBF; // disable channel
+			lengthEnable = false;
 		}
 	}
 
 	void clockenv() {
 		if (--envcounter <= 0) {
-			envcounter = envperiod;
-			if (envperiod != 0 && envvol != 15 && envvol != 0 && envtriggered)
+			envcounter = envperiod == 0 ? 8 : envperiod;// period 0 is treated
+														// as 8
+			if (envperiod != 0 && envtriggered)
 				envvol += envadd;
-			if (envvol == 15 || envvol == 0)
+			if (envvol == 16 || envvol == -1) {
 				envtriggered = false;
+			}
+			if (envvol == 16)
+				envvol = 15;
+			if (envvol == -1)
+				envvol = 0;
 		}
 	}
-	int poll(){
-		return lcEnabled? sqsample*envvol:0;
+
+	public boolean status() {
+		return lengthEnable;
 	}
 
+	int poll() {
+		return lengthEnable ? sqsample * envvol : 0;
+	}
 
 }

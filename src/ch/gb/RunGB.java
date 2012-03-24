@@ -1,5 +1,6 @@
 package ch.gb;
 
+import ch.gb.apu.APU;
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
 import ch.gb.gpu.OpenglDisplay;
@@ -16,6 +17,7 @@ public class RunGB implements ApplicationListener {
 	private GBComponents comps;
 	private CPU cpu;
 	private GPU gpu;
+	private APU apu;
 	private MemoryManager mem;
 
 	private final float framerate = 60f;// 60hz
@@ -31,6 +33,7 @@ public class RunGB implements ApplicationListener {
 	private OpenglDisplay screen;
 	private OpenglDisplay map;
 	private OpenglDisplay sprshow;
+	private OpenglDisplay waveforms;
 
 	private float fontalpha = 1.0f;
 
@@ -44,29 +47,36 @@ public class RunGB implements ApplicationListener {
 		screen = new OpenglDisplay(160, 144, 256, 16);
 		map = new OpenglDisplay(256, 256, 256, 16);
 		sprshow = new OpenglDisplay(64, 80, 128, 16);
+		waveforms = new OpenglDisplay(256, 65, 256, 16);
 
 		comps = new GBComponents();
 
 		cpu = new CPU();
-		gpu = new GPU();
+		gpu = new GPU(this);
+		apu = new APU();
 		mem = new MemoryManager();
 
+		apu.start();
 		// @formatter:off
 		// GAMES
-		//mem.loadRom("Roms/Tetris.gb");//FUCKING HELL YES IT WORKS GODDAMNIT OMGWTFBBQ, no window
+		//mem.loadRom("Roms/Tetris.gb");//bg bugged
 		// mem.loadRom("Roms/Asteroids.gb"); //works
 		//mem.loadRom("Roms/Boulder Dash (U) [!].gb");//works
 		// mem.loadRom("Roms/Missile Command (U) [M][!].gb");//works
 		// mem.loadRom("Roms/Motocross Maniacs (E) [!].gb");//blank screen, doesnt start
 		//mem.loadRom("Roms/Amida (J).gb");//works but crappy game
-		// mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging and flickers like mad
+		 //mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging and flickers like mad
 		//mem.loadRom("Roms/Boxxle (U) (V1.1) [!].gb");//works, 8x16 mode glitch
 		//mem.loadRom("Roms/Super Mario Land (V1.1) (JUA) [!].gb");//works, sligthy glitch (vlbank?)
-		mem.loadRom("Roms/Super Mario Land 2 - 6 Golden Coins (UE) (V1.2) [!].gb");//
-		//mem.loadRom("Roms/Super Mario Land 3 - Warioland (JUE) [!].gb");//scanlines slightly glitchy
+		//mem.loadRom("Roms/Super Mario Land 2 - 6 Golden Coins (UE) (V1.2) [!].gb");//
+		//mem.loadRom("Roms/Super Mario Land 3 - Warioland (JUE) [!].gb");
 		//mem.loadRom("Roms/Tetris 2 (UE) [S][!].gb");
 		//mem.loadRom("Roms/Legend of Zelda, The - Link's Awakening.gb");
 		//mem.loadRom("Roms/Pokemon Red (U) [S][!].gb");//y dude its MBC3 
+		//mem.loadRom("Roms/Metroid II - Return of Samus (UE) [!].gb");
+		//mem.loadRom("Roms/Kirby's Dream Land 2 (U) [S][!].gb");
+		//mem.loadRom("Roms/Yoshi (U) [!].gb");//hella bugged
+		//mem.loadRom("Roms/Batman - Return of the Joker.gb");
 		
 		// CPU INSTRUCTION TESTS - ALL PASSED
 		// mem.loadRom("Testroms/cpu_instrs/individual/01-special.gb");//PASSED
@@ -98,6 +108,11 @@ public class RunGB implements ApplicationListener {
 		// GRAPHICS
 		// mem.loadRom("Testroms/graphicskev/gbtest.gb");
 
+		//SOUND
+		 //mem.loadRom("Testroms/sound/dmg_sound.gb");
+		//mem.loadRom("Testroms/sound/01-registers.gb");
+		//mem.loadRom("Testroms/sound/02-len ctr.gb");
+		
 		// general SYSTEST
 		// mem.loadRom("Testroms/systest/test.gb");//not supported
 
@@ -130,6 +145,7 @@ public class RunGB implements ApplicationListener {
 		comps.cpu = cpu;
 		comps.mem = mem;
 		comps.gpu = gpu;
+		comps.apu = apu;
 		comps.link();
 
 		cpu.reset();
@@ -144,6 +160,9 @@ public class RunGB implements ApplicationListener {
 
 	private final int[][] bg = new int[256][256];
 	private final int[][] spr = new int[64][80];
+	private final int[][] wave = new int[256][65];
+	private int wavecounter = 0;
+	private final int waveshift = 0;
 
 	private void doDebugVram() {
 		for (int y = 0; y < 256 / 8; y++) {
@@ -187,6 +206,31 @@ public class RunGB implements ApplicationListener {
 		sprshow.refresh(spr);
 	}
 
+	private void doDebugWaveforms() {
+
+		// System.out.println(apu.getSampleoffset());
+		// can draw max 256 samples from the buffer...
+		int limit = Math.min(256, apu.getSampleoffset() / 2);// always dividable
+
+		// shift buffer left by limit
+		for (int y = 0; y < 65; y++) {
+			for (int x =0; x < 256; x++) {
+			//	wave[x - limit][y] = wave[x][y];
+				wave[x][y] = 0xFFFFFFFF;
+			}
+		}
+		wavecounter = 0;
+		for (int i = 256 - limit; i < 256; i++) {
+			short sample = (short) ((apu.samplebuffer[wavecounter * 2] & 0xff) | ((apu.samplebuffer[wavecounter * 2 + 1] & 0xff) << 8));
+			int y = (sample / 1024);// equals /32768 *32//range from +32 to -32
+			y = 64 - (y + 32);// transform space cooridantes
+			wave[i][y] = 0xFF0000FF;
+			wavecounter++;
+		}
+
+		waveforms.refresh(wave);
+	}
+
 	@Override
 	public void render() {
 		Gdx.gl.glClearColor(0.2f, 0.2f, 0.2f, 1);
@@ -202,17 +246,21 @@ public class RunGB implements ApplicationListener {
 				int cycles = cpu.tick();
 				mem.clock(cycles);
 				gpu.tick(cycles);
+				apu.tick(cycles);
 				cpuacc += cycles;
+				
 			}
+			doDebugWaveforms();
+			apu.flush();
 			cpuacc -= framerate;
 			clock++;
 			fontalpha -= 0.003f;
+
 		}
 
 		doDebugVram();
 		doDebugSpr();
 
-		screen.refresh(gpu.videobuffer);
 		map.refresh(bg);
 
 		int sprzoom = 2;
@@ -221,6 +269,11 @@ public class RunGB implements ApplicationListener {
 		float fontoffset = font.getCapHeight() - font.getDescent();
 
 		batch.begin();
+
+		screen.drawStraight(batch, 50, 50, 0, 0, 160, 144, 2, 2, 0, 0, 0, 160, 144);
+		map.drawStraight(batch, w - 300, h - 300, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
+		sprshow.drawStraight(batch, w - 300, h - 500, 0, 0, 64, 80, sprzoom, sprzoom, 0, 0, 0, 64, 80);
+		waveforms.drawStraight(batch, 50, h - 150, 0, 0, 256, 64, 1, 1, 0, 0, 0, 256, 64);
 
 		font.draw(batch, "FPS:" + Gdx.graphics.getFramesPerSecond(), 10, h - 10);
 		font.draw(batch, "bluew, 2012", 100, h - 10);
@@ -232,10 +285,6 @@ public class RunGB implements ApplicationListener {
 		font.draw(batch, "Gameboy screen: 160x144, 2x zoom", 50, 50 + 144 * 2 + fontoffset);
 		font.draw(batch, "Sprites", w - 300, h - 500 + 80 * sprzoom + fontoffset);
 
-		screen.drawStraight(batch, 50, 50, 0, 0, 160, 144, 2, 2, 0, 0, 0, 160, 144);
-		map.drawStraight(batch, w - 300, h - 300, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
-		sprshow.drawStraight(batch, w - 300, h - 500, 0, 0, 64, 80, sprzoom, sprzoom, 0, 0, 0, 64, 80);
-
 		batch.end();
 
 		// timedDebug(15);
@@ -245,6 +294,10 @@ public class RunGB implements ApplicationListener {
 		if (clock / 60f >= trigger) {
 			CPU.DEBUG_ENABLED = true;
 		}
+	}
+
+	public void flushScreen() {
+		screen.refresh(gpu.videobuffer);
 	}
 
 	@Override
@@ -263,13 +316,14 @@ public class RunGB implements ApplicationListener {
 	public void dispose() {
 		// TODO Auto-generated method stub
 		font.dispose();
-		batch.dispose();
 		fadeoutFont.dispose();
 		screen.dispose();
 		map.dispose();
 		sprshow.dispose();
-		
-		//write savegames
+		batch.dispose();
+
+		apu.stop();
+		// write savegames
 		mem.saveRam();
 	}
 

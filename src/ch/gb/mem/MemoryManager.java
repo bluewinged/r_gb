@@ -7,6 +7,7 @@ import java.util.HashMap;
 import ch.gb.Component;
 import ch.gb.GBComponents;
 import ch.gb.Settings;
+import ch.gb.apu.APU;
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
 import ch.gb.io.IOport;
@@ -46,6 +47,7 @@ public class MemoryManager implements Component {
 	private Mapper mbc;
 	private CPU cpu;
 	private GPU gpu;
+	private APU apu;
 
 	private String romInfo = "";
 	// more IO
@@ -137,7 +139,7 @@ public class MemoryManager implements Component {
 				// System.out.println("LAUNCHING DMA");
 			} else if (add >= 0xFF10 && add <= 0xFF3F) {
 				// Sound
-
+				apu.write(add, b);
 			} else if (add >= 0xFF40 && add <= 0xFF4B) {
 				// LCD
 				gpu.write(add, b);
@@ -197,7 +199,7 @@ public class MemoryManager implements Component {
 				return 0;
 			} else if (add >= 0xFF10 && add <= 0xFF3F) {
 				// Sound
-				return 0;
+				return apu.read(add);
 			} else if (add >= 0xFF40 && add <= 0xFF4B) {
 				// LCD
 				return gpu.read(add);
@@ -244,6 +246,9 @@ public class MemoryManager implements Component {
 		// System.out.println("IRQ?"+Utils.dumpHex(irq));
 		writeByte(CPU.IF_REG, irq);
 	}
+	public void requestRefresh(){
+		
+	}
 
 	public void loadRom(String path) {
 		rom = new Rom(path);
@@ -289,6 +294,7 @@ public class MemoryManager implements Component {
 	public void link(GBComponents comps) {
 		cpu = comps.cpu;
 		gpu = comps.gpu;
+		apu = comps.apu;
 
 	}
 

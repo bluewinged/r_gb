@@ -104,6 +104,9 @@ public class Rom {
 	public int getType() {
 		return cartridgetype;
 	}
+	public int get16kRomNum(){
+		return banks16kB;
+	}
 
 	public byte[] get16kRomBank(int bank) {
 		return rom[bank];

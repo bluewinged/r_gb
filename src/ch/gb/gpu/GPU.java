@@ -2,6 +2,7 @@ package ch.gb.gpu;
 
 import ch.gb.Component;
 import ch.gb.GBComponents;
+import ch.gb.RunGB;
 import ch.gb.cpu.CPU;
 import ch.gb.mem.MemoryManager;
 import ch.gb.utils.Utils;
@@ -56,18 +57,24 @@ public class GPU implements Component {
 	// green : 048;098;048 -> 0x30, 0x62, 0x30
 	// bright grn: 139;172;015 -> 0x8B, 0xAC, 0xF
 	// brgter grn: 155;188;015 -> 0x9B, 0xBC, 0xF
-	private final int[] palette = { 0x9BBC0FFF, 0x8BAC0FFF, 0x306230FF, 0x0F380FFF };
-
+	// brighter, bright, green, darkgreen
+	// private final int[] palette = { 0x9BBC0FFF, 0x8BAC0FFF,
+	// 0x306230FF,0x0F380FFF };//wiki
+	// private final int[] palette = { 0xE0f8d0ff, 0x88C070ff, 0x346856,
+	// 0x081820ff };//BGP
+	private final int[] palette = { 0xE8E8E8FF, 0xA0A0A0FF, 0x585858FF, 0x101010FF };// b/w
 	private int scanlinecyc = 456;
 
+	private final RunGB emu;
 	private MemoryManager mem;
+
 	public int[][] videobuffer;
 
-
-
-	public GPU() {
+	public GPU(RunGB emu) {
+		this.emu = emu;
 		videobuffer = new int[160][144];
 	}
+
 	@Override
 	public void reset() {
 		stat = 0;
@@ -93,6 +100,7 @@ public class GPU implements Component {
 			}
 		}
 	}
+
 	public void write(int add, byte b) {
 		if (add == LCD_C) {
 			lcdc = b;
@@ -222,9 +230,10 @@ public class GPU implements Component {
 			ly++;
 
 			// VBlank?
-			if (ly == 144)
+			if (ly == 144) {
 				mem.requestInterrupt(CPU.VBLANK_IR);
-
+				emu.flushScreen();// flush data into video driver
+			}
 			if (ly > 153)
 				ly = 0;
 
@@ -238,26 +247,40 @@ public class GPU implements Component {
 		}
 	}
 
-	public void drawBg() { // bg scanline
+	public void drawBg() { // bg and window scanline
 		int y = ly + scy;// which scanline in the tilemap
 		y = y % 256;// wrap around bg map
 
-		int intiley = y % 8 * 2;
+		int bgInTiley = y % 8 * 2;
+		int wiInTiley = ((ly - wy) % 8) * 2;
 
 		boolean signed = bgWiTiledata == 0x9000;
-		int bgEntry = bgTilemap + y / 8 * 32;// 20 tiles per scanline
-
+		int bgEntry = bgTilemap + y / 8 * 32;// 32 tiles per nametablerow
+		int wiEntry = windowTilemap + (ly - wy) / 8 * 32;
+		// first check wether this can be a window scanline
+		boolean canWindow = windowEnable && wy <= ly;
+		int targetTilemap = bgEntry;
+		int targetTiley = bgInTiley;
 		for (int x = 0; x < 160; x++) {
-			int tx = (x + scx) &0xff;
+
+			int tx = (x + scx) & 0xff;
+
+			if (x >= wx && canWindow) {
+				// once switched not possible anymore to switch back to bgEntry
+				targetTilemap = wiEntry;
+				tx = x - wx;// to window space
+				targetTiley = wiInTiley;
+
+			}
 
 			// fetch namtable byte
-			byte tileid = mem.readByte(bgEntry + tx / 8);
+			byte tileid = mem.readByte(targetTilemap + tx / 8);
 
 			int tileloc = bgWiTiledata + (signed ? (int) tileid : tileid & 0xff) * 16;
 
 			// fetch tile pattern
-			byte lo = mem.readByte(tileloc + intiley);
-			byte hi = mem.readByte(tileloc + intiley + 1);
+			byte lo = mem.readByte(tileloc + targetTiley);
+			byte hi = mem.readByte(tileloc + targetTiley + 1);
 
 			int intilex = tx % 8;
 
@@ -296,14 +319,19 @@ public class GPU implements Component {
 
 					int newx = (xflip == 1 ? x : 7 - x);
 					int tx = xpos + x;
+					// TODO:wrong since only consider bg[0], not assigned color
+					if (tx < 0 || tx >= 160)
+						continue;
 
-					int palcolor = obp[pal][(lo >> (newx)) & 1 | ((hi >> (newx)) & 1) << 1];
+					if (priority == 1 && videobuffer[tx][ly] != palette[bgp[0]])
+						continue;
 
-					if (tx >= 0 && tx < 160 && palcolor != 0) // sprites only
-																// have 3 colors
+					int index = (lo >> (newx)) & 1 | ((hi >> (newx)) & 1) << 1;
+					int palcolor = obp[pal][index];
+					if (index != 0)// spr 3colors
 						videobuffer[tx][ly] = palette[palcolor];
-				}
 
+				}
 			}
 		}
 	}

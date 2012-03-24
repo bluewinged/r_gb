@@ -48,7 +48,7 @@ public class MBC1 extends Mapper {
 	@Override
 	public void write(int add, byte b) {
 		// System.out.println("DETECTED MBC1 WRITE ABORT:" + Utils.dumpHex(add)
-		// + "->" + Utils.dumpHex(b));
+		//+ "->" + Utils.dumpHex(b));
 		if (add < 0x2000) {
 			// RAM Enable
 			if ((b & 0xA) == 0xA) {
@@ -63,7 +63,7 @@ public class MBC1 extends Mapper {
 			rombank = b & 0x1F;// set lower 5;
 			if (rombank == 0x00 || rombank == 0x20 || rombank == 0x40 || rombank == 0x60)
 				rombank++;
-			switch16kRom(ROM_0x4000, rom.get16kRomBank(rombank));
+			switch16kRom(ROM_0x4000, rom.get16kRomBank(rombank%rom.get16kRomNum()));//wrapping fix
 
 		} else if (add < 0x6000) {
 			b &= 3;// 2bit reg

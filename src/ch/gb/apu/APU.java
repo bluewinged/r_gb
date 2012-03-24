@@ -3,6 +3,7 @@ package ch.gb.apu;
 import java.util.HashMap;
 
 import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioFormat.Encoding;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
 import javax.sound.sampled.LineUnavailableException;
@@ -11,6 +12,7 @@ import javax.sound.sampled.SourceDataLine;
 import ch.gb.Component;
 import ch.gb.GBComponents;
 import ch.gb.cpu.CPU;
+import ch.gb.utils.Audio;
 
 public class APU implements Component {
 
@@ -37,13 +39,14 @@ public class APU implements Component {
 	// FF30-FF3F Wave Pattern RAM
 
 	// Noise
-	public static final int NR40 = 0xFF20;
+	public static final int NR40 = 0xFF1F;
 	public static final int NR41 = 0xFF20;
 	public static final int NR42 = 0xFF21;
 	public static final int NR43 = 0xFF22;
 	public static final int NR44 = 0xFF23;
 
 	// Soundcontrol
+	public static final int NR50 = 0xFF24;
 	public static final int NR51 = 0xFF25;
 	public static final int NR52 = 0xFF26;
 
@@ -54,8 +57,12 @@ public class APU implements Component {
 	private final int bitspersample = 16;
 	private int resamplerate; // 95 for 44100hz yeeeaahh
 	private int resamplecounter;
+	private final int bufferSize = 18256;
+	public final byte[] samplebuffer;
+	private int sampleoffset;
+
 	private int seqstep;
-	private int seqcounter;
+	private int seqcounter = 8192;
 
 	private final HashMap<Integer, Channel> iochannel;
 
@@ -65,13 +72,17 @@ public class APU implements Component {
 	private final Wave wave;
 	private final PowerControl powercontrol;
 	private final Wavetables wt;
+	
+	private Thread AudioThread;
 
 	public APU() {
+		samplebuffer = new byte[bufferSize];
+
 		quadrangle1 = new Square(false);
 		quadrangle2 = new Square(true);
 		noise = new Noise();
 		wave = new Wave();
-		powercontrol = new PowerControl();
+		powercontrol = new PowerControl(this);
 		wt = new Wavetables();
 
 		iochannel = new HashMap<Integer, Channel>();
@@ -125,10 +136,18 @@ public class APU implements Component {
 	}
 
 	public void write(int add, byte b) {
+		if (add >= NR10 && add <= NR51 && !powercontrol.powerstatus)
+			return;
+		if(add>=0xFF27 && add <=0xFF2F)
+			return;
+		//System.out.println(Utils.dumpHex(add));
 		iochannel.get(add).write(add, b);
 	}
 
 	public byte read(int add) {
+		if(add>=0xFF27 && add <=0xFF2F){
+			return 0;
+		}
 		return iochannel.get(add).read(add);
 	}
 
@@ -136,7 +155,9 @@ public class APU implements Component {
 		if (line != null) {
 			return;
 		}
-		AudioFormat format = new AudioFormat(samplerate, bitspersample, numChannels, true, false);
+		// AudioFormat format = new AudioFormat(samplerate, bitspersample,
+		// numChannels, true, false);
+		AudioFormat format = new AudioFormat(Encoding.PCM_SIGNED, samplerate, bitspersample, 1, 2, samplerate, false);
 		// downsampling: cpu freq -> 44'100hz
 		resamplecounter = resamplerate = (CPU.CLOCK / samplerate);
 
@@ -157,36 +178,83 @@ public class APU implements Component {
 		}
 	}
 
+	private int accumsq2;
+	private int accumcycles;
+
 	public void tick(int cpucycles) {
 		// frame sequencer, 512 hz (4194304/512 =8192)
 		seqcounter -= cpucycles;
-		if (seqcounter <= 8192) {
+		if (seqcounter <= 0) {
 			seqcounter += 8192;
 			seqstep = (seqstep + 1) & 7;
 			switch (seqstep) {
 			case 0:
-				break;// clock
+				quadrangle2.clocklen();
+				break;// clock len
 			case 1:
 				break;
 			case 2:
-				break;// clock clock
+				quadrangle2.clocklen();
+				break;// clock len clock sweep
 			case 3:
 				break;
 			case 4:
-				break;// clock
+				quadrangle2.clocklen();
+				break;// clock len
 			case 5:
 				break;
 			case 6:
-				break;// clock clock
+				quadrangle2.clocklen();
+				break;// clock len clock sweep
 			case 7:
-				break;// clock
+				quadrangle2.clockenv();
+				break;// clock env
 			}
-		}
-		resamplecounter--;
-		if (resamplecounter <= 0) {
-			resamplecounter += resamplerate;
 
 		}
+		if (powercontrol.powerstatus) {
+			quadrangle2.clock(cpucycles);
+		}
+
+		accumsq2 += quadrangle2.poll()*cpucycles;
+
+		accumcycles += cpucycles;
+
+		resamplecounter-=cpucycles;
+		if (resamplecounter <= 0) {
+			resamplecounter += resamplerate;
+			//FreqMeter.measure();
+			float q2 = accumsq2/((float)(accumcycles*15));
+			//System.out.println(q2);
+			accumcycles=0;
+			accumsq2=0;
+			
+			float usample =Audio.blockDC((q2 * 65535)- 32768 );
+			if (usample > 32767-1) {
+				usample = 32767-1;
+			}
+			if (usample < -32768-2) {
+				usample = -32768-2;
+			}
+			int sample = (int) usample;
+			// System.out.println(sample);
+			samplebuffer[sampleoffset++] = (byte) (sample & 0xff);
+			samplebuffer[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
+
+		}
+	}
+
+	public void flush() {//can block, better in a thread
+		if (line != null) {
+			line.write(samplebuffer, 0, sampleoffset);
+		} else {
+			System.out.println("line is null");
+		}
+		sampleoffset = 0;
+	}
+
+	public int getSampleoffset() {
+		return sampleoffset;
 	}
 
 	@Override
@@ -199,19 +267,80 @@ public class APU implements Component {
 
 	}
 
+	public void powerOn() {
+		seqstep = 0;
+		seqcounter = 8192;
+		quadrangle2.powerOn();
+	}
+
+	public void powerOff() {
+		byte i = 0;
+		quadrangle2.write(NR10, i);
+		quadrangle2.write(NR11, i);
+		quadrangle2.write(NR12, i);
+		quadrangle2.write(NR13, i);
+		quadrangle2.write(NR14, i);
+	}
+	public byte channelstates(){
+		//TODO: other channel
+		int q2 = quadrangle2.status()?2:0;
+		return (byte)q2;
+	}
+
 	// actually not a channel, just abusing oop
 	private class PowerControl extends Channel {
+		private byte nr50;
+		private byte nr51;
+		private byte nr52;
+
+		boolean vinLenable;
+		boolean vinRenable;
+		int leftvol;
+		int rightvol;
+		boolean powerstatus = false;
+
+		private final APU apu;
+
+		PowerControl(APU apu) {
+			this.apu = apu;
+		}
 
 		@Override
 		void write(int add, byte b) {
-			// TODO Auto-generated method stub
-
+			if (add == NR50) {
+				nr50 = b;
+				vinLenable = (b & 0x80) == 0x80;
+				vinRenable = (b & 8) == 8;
+				leftvol = (b >> 4) & 7;
+				rightvol = b & 7;
+			} else if (add == NR51) {
+				nr51 = b;
+			} else if (add == NR52) {
+				nr52 = b;
+				//System.out.println("NR52:" + Utils.dumpHex(b));
+				boolean oldstatus = powerstatus;
+				powerstatus = (b & 0x80) == 0x80;
+				if (oldstatus != powerstatus) {
+					if (powerstatus) {
+						apu.powerOn();
+					} else {
+						apu.powerOff();
+					}
+				}
+			}
 		}
 
 		@Override
 		byte read(int add) {
-			// TODO Auto-generated method stub
-			return 0;
+			if (add == NR50) {
+				return (byte) (nr50 | 0x00);
+			} else if (add == NR51) {
+				return (byte) (nr51 | 0x00);
+			} else if (add == NR52) {
+				//System.out.println("want read");
+				return (byte) (channelstates()| nr52 | 0x70);
+			}
+			throw new RuntimeException("trololol not possibru");
 		}
 
 	}
@@ -220,7 +349,7 @@ public class APU implements Component {
 		private final byte[] table;
 
 		Wavetables() {
-			table = new byte[0xF];
+			table = new byte[0x10];
 		}
 
 		@Override
@@ -235,5 +364,4 @@ public class APU implements Component {
 		}
 
 	}
-
 }
