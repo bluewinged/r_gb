@@ -1,6 +1,5 @@
 package ch.gb.apu;
 
-import ch.gb.utils.Utils;
 
 public class Square extends Channel {
 	private int duty;
@@ -14,7 +13,14 @@ public class Square extends Channel {
 	private int envcounter = 0;
 	private boolean envtriggered = true;
 
-	private final int lengthEnabled = 0x40;
+	private int sweepcounter;
+	private boolean sweepenabled;
+	private int sweepfreq;
+	private int sweepneg;
+	private final int sweepperiodmask = 0x70;
+	private final int sweepshiftmask = 0x7;
+
+	private final int lengthmask = 0x40;
 	private int lc;
 	private boolean enabled; // also channel enabled flag (?)
 
@@ -22,17 +28,37 @@ public class Square extends Channel {
 	private int sqsample;
 
 	private final int off;
+	private final boolean hasSweep;
 
 	Square(boolean is2nd) {
 		off = is2nd ? 5 : 0;
+		hasSweep = !is2nd;
+	}
+	@Override
+	public void reset(){
+		freq=0;
+		duty=0;
+		period = 2048*4;
+		envvol =0;
+		envadd=0;
+		envcounter=0;
+		envtriggered = true;
+		sweepcounter=0;
+		sweepenabled=false;
+		sweepfreq=0;
+		sweepneg=0;
+		lc=0;
+		enabled=false;
+		sequencer=0;
+		sqsample=0;
 	}
 
 	public void powerOn() {
 		sequencer = 0;
 	}
 
-	private boolean dacEnabled(byte b) {
-		return (b & 0xF8) != 0;
+	private boolean dacEnabled() {
+		return (nr2 & 0xF8) != 0;
 	}
 
 	private int reloadEnv() {
@@ -40,6 +66,20 @@ public class Square extends Channel {
 		envcounter = (period != 0 ? period : 8);
 		return period;
 	}
+
+	private int getFrequency() {
+		return (((nr4 & 7) << 8) | (nr3 & 0xff));
+	}
+	private int getPeriod(){
+		return (2048-getFrequency())*4;
+	}
+
+	private void reloadSweep() {
+		sweepcounter = (nr0 >> 4) & 7;
+		if (sweepcounter == 0)
+			sweepcounter = 8;
+	}
+
 
 	@Override
 	void write(int add, byte b) {
@@ -54,7 +94,7 @@ public class Square extends Channel {
 			envvol = (b >> 4) & 0xf;
 			envadd = (b & 8) == 8 ? 1 : -1;
 			envperiod = b & 7;
-			if (!dacEnabled(b))
+			if (!dacEnabled())
 				enabled = false;
 		} else if (add == 0xFF13 + off) {
 			nr3 = b;
@@ -71,20 +111,31 @@ public class Square extends Channel {
 
 			// enabled = (b & 0x40) == 0x40;//TODO: fixes tetris oo? that isnt
 			// correct i think
-			if ((b & 0x80) == 0x80) {// trigger
+			if ((b & triggermask) == triggermask) {// trigger
 				nr4 &= 0x7F;// clear trigger flag
 
 				envtriggered = true;
 				enabled = true;
-				// System.out.println(lc);
 				if (lc == 0)
 					lc = 64;
 				divider = period;// TODO:low 2 bits are not modified
 				reloadEnv();
 				envvol = (nr2 >> 4) & 0xf;// reload volume
-				// TODO: sweep does some stuff
 
-				if (!dacEnabled(b))
+				if (hasSweep) {// only first sq channel
+					sweepfreq = getFrequency();
+					reloadSweep();
+					sweepenabled = false;
+					if ((nr0 & sweepperiodmask) != 0 || (nr0 & sweepshiftmask) != 0)
+						sweepenabled = true;
+					if ((nr0 & sweepshiftmask) != 0) {
+						// frequency calculation and overflow check
+						calculateSweep(false);
+					}
+
+				}
+
+				if (!dacEnabled())
 					enabled = false;
 
 			}
@@ -93,9 +144,9 @@ public class Square extends Channel {
 
 	@Override
 	byte read(int add) {
-		System.out.println("anything?" + Utils.dumpHex(add));
+		//System.out.println("anything?" + Utils.dumpHex(add));
 		if (add == 0xFF10 + off) {
-			return off == 5 ? (byte) (nr0 | 0xff) : (byte) (nr0 | 0x80);
+			return !hasSweep ? (byte) (nr0 | 0xff) : (byte) (nr0 | 0x80);
 		} else if (add == 0xFF11 + off) {
 			return (byte) (nr1 | 0x3f);
 		} else if (add == 0xFF12 + off) {
@@ -103,7 +154,6 @@ public class Square extends Channel {
 		} else if (add == 0xFF13 + off) {
 			return (byte) (nr3 | 0xff);
 		} else if (add == 0xFF14 + off) {
-			// System.out.println("pololo");
 			return (byte) (nr4 | 0xBF | (enabled ? 0x40 : 0));
 		} else {
 			throw new RuntimeException("hurrdurr");
@@ -120,11 +170,10 @@ public class Square extends Channel {
 	}
 
 	void clocklen() {
-		if ((nr4 & lengthEnabled) != 0 && lc != 0) {// length enabled
+		if ((nr4 & lengthmask) != 0 && lc != 0) {// length enabled
 			if (--lc <= 0)
 				enabled = false;
 		}
-
 	}
 
 	void clockenv() {
@@ -143,11 +192,42 @@ public class Square extends Channel {
 		}
 	}
 
+	void clocksweep() {
+		if (--sweepcounter <= 0) {
+			reloadSweep();
+			if (sweepenabled && (nr0 & sweepperiodmask) != 0) {
+				// calc frequency and overflow check
+				calculateSweep(true);
+				calculateSweep(false);
+			}
+		}
+	}
+
+	private void calculateSweep(boolean wantUpdate) {
+		int tmpfreq = sweepfreq;
+		int shift = (nr0 & sweepshiftmask);
+		int offset = tmpfreq>>shift;
+		sweepneg = nr0 & 8;
+		if(sweepneg!=0)
+			offset = -offset;
+		tmpfreq += offset;
+		if(tmpfreq > 2047){
+			enabled = false;
+		}else if(shift!=0 && wantUpdate){
+			sweepfreq = tmpfreq;
+			//update frequency and period
+			nr3 = (byte)(tmpfreq & 0xff);
+			nr4 = (byte)((nr4&0xF8)|((tmpfreq>>8)&7));
+			freq = getFrequency();
+			period = getPeriod();
+		}
+	}
+
 	public boolean status() {
 		return enabled;
 	}
 
-	int poll() {
+	public int poll() {
 		return enabled ? sqsample * envvol : 0;
 	}
 

@@ -5,6 +5,7 @@ import java.io.OutputStream;
 import java.util.HashMap;
 
 import ch.gb.Component;
+import ch.gb.GB;
 import ch.gb.GBComponents;
 import ch.gb.Settings;
 import ch.gb.apu.APU;
@@ -65,6 +66,13 @@ public class MemoryManager implements Component {
 
 	@Override
 	public void reset() {
+		interruptEnableReg=0;
+		irqReg=0;
+		romInfo="";
+		speedmode=0;
+		rom=null;
+		mbc=null;
+		
 		rombanks = new byte[2][0x4000];
 		vram = new byte[0x2000];
 		exram = new byte[0x2000];
@@ -78,7 +86,7 @@ public class MemoryManager implements Component {
 		serial = new Serial();
 		sprdma = new SpriteDma(this);
 
-		Gdx.input.setInputProcessor(joy);
+		GB.multiplexer.addProcessor(joy);
 
 		io = new HashMap<Integer, IOport>();
 
@@ -108,7 +116,7 @@ public class MemoryManager implements Component {
 			vram[add - 0x8000] = b;
 		} else if (add < 0xC000) {
 			// 8kB exram
-			exram[(add - 0xA000)] = b;
+			exram[(add - 0xA000)%exram.length] = b;
 		} else if (add < 0xD000) {
 			// 4kB WRAM 0
 			wram0[add - 0xC000] = b;
@@ -173,7 +181,7 @@ public class MemoryManager implements Component {
 			return vram[add - 0x8000];
 		} else if (add < 0xC000) {
 			// 8kB EXRAM
-			return exram[(add - 0xA000)];
+			return exram[(add - 0xA000)%exram.length];
 		} else if (add < 0xD000) {
 			// 4kB WRAM 0
 			return wram0[add - 0xC000];
@@ -246,15 +254,12 @@ public class MemoryManager implements Component {
 		// System.out.println("IRQ?"+Utils.dumpHex(irq));
 		writeByte(CPU.IF_REG, irq);
 	}
-	public void requestRefresh(){
-		
-	}
+
 
 	public void loadRom(String path) {
 		rom = new Rom(path);
-		System.out.println(rom.getInformation());
+		//System.out.println(rom.getInformation());
 		romInfo = rom.getInformation();
-
 		mbc = Mapper.createMBC(this, rom);
 	}
 
@@ -288,6 +293,9 @@ public class MemoryManager implements Component {
 
 	public String getRomInfo() {
 		return romInfo;
+	}
+	public String romLoadPath(){
+		return rom!=null?rom.getLoadPath():null;
 	}
 
 	@Override

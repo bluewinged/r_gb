@@ -9,6 +9,11 @@ public class SpriteDma implements IOport {
 	public SpriteDma(MemoryManager mem) {
 		this.mem = mem;
 	}
+	@Override
+	public void reset() {
+		// TODO Auto-generated method stub
+		
+	}
 
 	@Override
 	public void write(int add, byte b) {
@@ -28,5 +33,6 @@ public class SpriteDma implements IOport {
 	public void tick() {
 		// Later used for timed DMA transfer
 	}
+
 
 }

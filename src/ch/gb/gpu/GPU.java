@@ -1,8 +1,8 @@
 package ch.gb.gpu;
 
 import ch.gb.Component;
+import ch.gb.GB;
 import ch.gb.GBComponents;
-import ch.gb.RunGB;
 import ch.gb.cpu.CPU;
 import ch.gb.mem.MemoryManager;
 import ch.gb.utils.Utils;
@@ -65,18 +65,19 @@ public class GPU implements Component {
 	private final int[] palette = { 0xE8E8E8FF, 0xA0A0A0FF, 0x585858FF, 0x101010FF };// b/w
 	private int scanlinecyc = 456;
 
-	private final RunGB emu;
+	private final GB emu;
 	private MemoryManager mem;
 
 	public int[][] videobuffer;
 
-	public GPU(RunGB emu) {
+	public GPU(GB emu) {
 		this.emu = emu;
 		videobuffer = new int[160][144];
 	}
 
 	@Override
 	public void reset() {
+		write(LCD_C,(byte)0);
 		stat = 0;
 		mode = 0;
 		coincidence = 0;
@@ -309,7 +310,7 @@ public class GPU implements Component {
 			// clipping
 			if (ly >= ypos && ly < (ypos + size)) {
 				int line = (ly - ypos);
-				line = yflip == 1 ? 7 - line : line;
+				line = yflip == 1 ? (spr8x16?15:7) - line : line;
 
 				int patternentry = 0x8000 + tileid * 16 + line * 2;
 				byte lo = mem.readByte(patternentry);

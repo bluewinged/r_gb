@@ -12,4 +12,7 @@ public class Audio {
 
 		return output;
 	}
+	public static float runLowpass(){
+		return 0f;
+	}
 }

@@ -8,7 +8,13 @@ public class Serial implements IOport {
 	private byte serialtransfercontrol;
 
 	private final byte tmp[] = new byte[1];
-
+	@Override
+	public void reset() {
+		tmp[0]=(byte)0;
+		serialtransferdata=(byte)0xff;
+		serialtransfercontrol =(byte)0;
+		
+	}
 	@Override
 	public void write(int add, byte b) {
 		if (add == SB) {
@@ -33,5 +39,7 @@ public class Serial implements IOport {
 		}
 		throw new RuntimeException("Serial-> coulnt map read");
 	}
+
+
 
 }

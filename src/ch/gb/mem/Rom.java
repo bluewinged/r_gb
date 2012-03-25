@@ -3,13 +3,12 @@ package ch.gb.mem;
 import java.io.IOException;
 import java.io.InputStream;
 
+import ch.gb.utils.RessourceLoader;
 import ch.gb.utils.Utils;
-
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.files.FileHandle;
 
 public class Rom {
 	private final byte[] header;
+	private boolean headerchunk=true;
 	private byte[][] rom;
 
 	private String title;
@@ -27,8 +26,8 @@ public class Rom {
 	private int globalchecksum;
 	private int banks16kB;
 
-	String path="";
-	
+	String path = "";
+
 	private String cartridgeAsString;
 	private final String nl;
 
@@ -40,12 +39,21 @@ public class Rom {
 	}
 
 	private void load(String path) {
-		FileHandle file = Gdx.files.internal(path);
-		InputStream is = file.read();
+		// FileHandle file = Gdx.files.internal(path);
+		InputStream is = RessourceLoader.load(path);// file.read();
 		byte[] tmp = new byte[0x10];
-
 		// get header
-		file.readBytes(header, 0x0, 0x150);
+		// file.readBytes(header, 0x0, 0x150);
+		try {
+			for (int i = 0; i < 0x150; i++) {
+				header[i] = (byte) is.read();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+		//is = RessourceLoader.load(path);// reload to reset IS
+
 		System.arraycopy(header, 0x134, tmp, 0, 0x10);
 
 		title = Utils.decASCII(tmp);
@@ -65,19 +73,24 @@ public class Rom {
 		headerchecksum = header[0x14D];
 		globalchecksum = (header[0x14E] & 0xff) << 8 | (header[0x14F] & 0xff);
 
-		cartridgeAsString = "Title:" + title + nl + "CGB flag:" + getGameboyType(cgbflag)+nl+"New licensee code:"+getNewLicensee(new1,new2) + nl + "SGB support:"
-				+ (sgbflag == 3) + nl + "Cartridgetype:" + getCartridgeType(cartridgetype) + nl + "Rom size:" + romsize
-				+ " in 16kB:" + banks16kB + nl + "Ram size:" + ramsize + nl + "Destination:"
-				+ getDestination(destination) + nl + "Old licensee code:" + getOldLicensee(oldlicensee) + nl
-				+ "Mask rom version num:" + maskRomVersionNumber + nl + "Header checksum:"
-				+ Utils.dumpHex(headerchecksum) + "  " + headerchksum(headerchecksum) + nl + "Global checksum:"
-				+ Utils.dumpHex(globalchecksum);
+		cartridgeAsString = "Title:" + title + nl + "CGB flag:" + getGameboyType(cgbflag) + nl + "New licensee code:"
+				+ getNewLicensee(new1, new2) + nl + "SGB support:" + (sgbflag == 3) + nl + "Cartridgetype:"
+				+ getCartridgeType(cartridgetype) + nl + "Rom size:" + romsize + " in 16kB:" + banks16kB + nl
+				+ "Ram size:" + ramsize + nl + "Destination:" + getDestination(destination) + nl + "Old licensee code:"
+				+ getOldLicensee(oldlicensee) + nl + "Mask rom version num:" + maskRomVersionNumber + nl
+				+ "Header checksum:" + Utils.dumpHex(headerchecksum) + "  " + headerchksum(headerchecksum) + nl
+				+ "Global checksum:" + Utils.dumpHex(globalchecksum);
 
 		// load in 16kB chunks
 		try {
 			rom = new byte[banks16kB][0x4000];
 			for (int i = 0; i < banks16kB; i++) {
 				for (int x = 0; x < 0x4000; x++) {
+					if(headerchunk){
+						x=0x150;
+						System.arraycopy(header, 0, rom[i],0, 0x150);
+						headerchunk = false;
+					}
 					rom[i][x] = (byte) is.read();
 				}
 			}
@@ -93,7 +106,8 @@ public class Rom {
 			e.printStackTrace();
 		}
 	}
-	public String getLoadPath(){
+
+	public String getLoadPath() {
 		return path;
 	}
 
@@ -104,7 +118,8 @@ public class Rom {
 	public int getType() {
 		return cartridgetype;
 	}
-	public int get16kRomNum(){
+
+	public int get16kRomNum() {
 		return banks16kB;
 	}
 

@@ -11,6 +11,7 @@ import javax.sound.sampled.SourceDataLine;
 
 import ch.gb.Component;
 import ch.gb.GBComponents;
+import ch.gb.Settings;
 import ch.gb.cpu.CPU;
 import ch.gb.utils.Audio;
 
@@ -59,7 +60,7 @@ public class APU implements Component {
 	private int resamplerate; // 95 for 44100hz yeeeaahh
 	private int resamplecounter;
 	private final int bufferSize = 2048;
-	public final byte[] samplebuffer;
+	public byte[] samplebuffer;
 	private int sampleoffset;
 
 	private int seqstep;
@@ -72,9 +73,8 @@ public class APU implements Component {
 	private final Noise noise;
 	private final Wave wave;
 	private final PowerControl powercontrol;
-	private final Wavetables wt;
 
-	private final AudioPlaybackJava audio;
+	private AudioPlaybackJava audio;
 
 	public APU() {
 		samplebuffer = new byte[bufferSize];
@@ -83,11 +83,9 @@ public class APU implements Component {
 
 		quadrangle1 = new Square(false);
 		quadrangle2 = new Square(true);
-
 		noise = new Noise();
 		wave = new Wave();
 		powercontrol = new PowerControl(this);
-		wt = new Wavetables();
 
 		iochannel = new HashMap<Integer, Channel>();
 		// channel 1
@@ -120,25 +118,44 @@ public class APU implements Component {
 		iochannel.put(0xFF26, powercontrol);
 		// FF27 ... FF2F not used
 		// FF30 ....FF3F wave tables
-		iochannel.put(0xFF30, wt);
-		iochannel.put(0xFF31, wt);
-		iochannel.put(0xFF32, wt);
-		iochannel.put(0xFF33, wt);
-		iochannel.put(0xFF34, wt);
-		iochannel.put(0xFF35, wt);
-		iochannel.put(0xFF36, wt);
-		iochannel.put(0xFF37, wt);
-		iochannel.put(0xFF38, wt);
-		iochannel.put(0xFF39, wt);
-		iochannel.put(0xFF3A, wt);
-		iochannel.put(0xFF3B, wt);
-		iochannel.put(0xFF3C, wt);
-		iochannel.put(0xFF3D, wt);
-		iochannel.put(0xFF3E, wt);
-		iochannel.put(0xFF3F, wt);
+		iochannel.put(0xFF30, wave);
+		iochannel.put(0xFF31, wave);
+		iochannel.put(0xFF32, wave);
+		iochannel.put(0xFF33, wave);
+		iochannel.put(0xFF34, wave);
+		iochannel.put(0xFF35, wave);
+		iochannel.put(0xFF36, wave);
+		iochannel.put(0xFF37, wave);
+		iochannel.put(0xFF38, wave);
+		iochannel.put(0xFF39, wave);
+		iochannel.put(0xFF3A, wave);
+		iochannel.put(0xFF3B, wave);
+		iochannel.put(0xFF3C, wave);
+		iochannel.put(0xFF3D, wave);
+		iochannel.put(0xFF3E, wave);
+		iochannel.put(0xFF3F, wave);
 
 	}
-
+	@Override
+	public void reset() {
+		seqstep=0;
+		seqcounter = 8192;
+		audio.discardSamples();
+		audio.stopPlayback();
+		audio = new AudioPlaybackJava();
+		audio.startPlayback();
+		samplebuffer = new byte[bufferSize];
+		
+		quadrangle1.reset();
+		quadrangle2.reset();
+		wave.reset();
+		noise.reset();
+		
+		accumsq1=0;
+		accumsq2=0;
+		accumwave=0;
+	}
+	
 	public void write(int add, byte b) {
 		if (add >= NR10 && add <= NR51 && !powercontrol.powerstatus)
 			return;
@@ -164,7 +181,7 @@ public class APU implements Component {
 	private class AudioPlaybackJava extends Thread implements AudioPlayback {
 		final Object waitlock = new Object();
 		private SourceDataLine line; // audio line
-		private final boolean isRunning;
+		private boolean isRunning;
 		private boolean requestFlush;
 
 		AudioPlaybackJava() {
@@ -228,6 +245,7 @@ public class APU implements Component {
 				line.drain();
 				line.close();
 			}
+			isRunning = false;
 		}
 
 		@Override
@@ -242,7 +260,6 @@ public class APU implements Component {
 			}
 		}
 	}
-	
 
 	public void flush() {
 		audio.flush();
@@ -255,9 +272,13 @@ public class APU implements Component {
 	public void stop() {
 		audio.stopPlayback();
 	}
+	public void discard(){
+		audio.discardSamples();
+	}
 
 	private int accumsq1;
 	private int accumsq2;
+	private int accumwave;
 	private int accumcycles;
 
 	public void tick(int cpucycles) {
@@ -270,24 +291,30 @@ public class APU implements Component {
 			case 0:
 				quadrangle1.clocklen();
 				quadrangle2.clocklen();
+				wave.clocklen();
 				break;// clock len
 			case 1:
 				break;
 			case 2:
 				quadrangle1.clocklen();
 				quadrangle2.clocklen();
+				quadrangle1.clocksweep();
+				wave.clocklen();
 				break;// clock len clock sweep
 			case 3:
 				break;
 			case 4:
 				quadrangle1.clocklen();
 				quadrangle2.clocklen();
+				wave.clocklen();
 				break;// clock len
 			case 5:
 				break;
 			case 6:
 				quadrangle1.clocklen();
 				quadrangle2.clocklen();
+				quadrangle1.clocksweep();
+				wave.clocklen();
 				break;// clock len clock sweep
 			case 7:
 				quadrangle1.clockenv();
@@ -299,25 +326,36 @@ public class APU implements Component {
 		if (powercontrol.powerstatus) {
 			quadrangle1.clock(cpucycles);
 			quadrangle2.clock(cpucycles);
+			wave.clock(cpucycles);
 		}
 		accumsq1 += quadrangle1.poll() * cpucycles;
 		accumsq2 += quadrangle2.poll() * cpucycles;
-
+		accumwave += wave.poll() * cpucycles;
 		accumcycles += cpucycles;
-
+		//@formatter:off
 		resamplecounter -= cpucycles;
 		if (resamplecounter <= 0) {
 			resamplecounter += resamplerate;
-			// FreqMeter.measure();
+			int le = (powercontrol.nr51 >> 4) & 0xf;// left and right enables
+			int re = powercontrol.nr51 & 0xf;
+			le =0xf;//TODO: remove audio-on hack
+			re = 0xf;
 			float q1 = accumsq1 / ((float) (accumcycles * 15));
 			float q2 = accumsq2 / ((float) (accumcycles * 15));// 15 is max
-			float chanL = (q1);
-			// System.out.println(q2);
+			float w = accumwave /((float)(accumcycles *15));
+			//System.out.println(""+(le>>1&1)+" yoo:"+ (re>>1&1));
+			q1*=Settings.ch1enable;
+			q2*=Settings.ch2enable;
+			w*= Settings.ch3enable;
+			float chanL = ((q1 * (le & 1) + q2 * (le >> 1 & 1)+w*(le>>2&1)) / 3) * (powercontrol.leftvol + 1) / 8;
+			float chanR = ((q1 * (re & 1) + q2 * (re >> 1 & 1)+w*(re>>2&1)) / 3) * (powercontrol.rightvol + 1) / 8;
+			float mixed = (chanL + chanR) / 2 * Settings.mastervolume;
 			accumcycles = 0;
 			accumsq1 = 0;
 			accumsq2 = 0;
+			accumwave=0;
 
-			float usample = Audio.blockDC((chanL * 65535) - 32768);
+			float usample = Audio.blockDC((mixed * 65535) - 32768);
 			if (usample > 32767 - 1) {
 				usample = 32767 - 1;
 			}
@@ -325,22 +363,17 @@ public class APU implements Component {
 				usample = -32768 - 2;
 			}
 			int sample = (int) usample;
-			// System.out.println(sample);
+			// ONLY MONO supported for now
 			samplebuffer[sampleoffset++] = (byte) (sample & 0xff);
 			samplebuffer[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
 			// overflowcontrol
 			if (sampleoffset == samplebuffer.length) {
-				audio.discardSamples();//too speed up resync?
+				//System.out.println("Audio BufferOVERFLOW");
+				audio.discardSamples();// too speed up resync?//TODO: SPEED MODUS disturbs later sound output
 				sampleoffset = 0;
 			}
+			//@formatter:on
 		}
-	}
-
-	public void powerOn() {
-		seqstep = 0;
-		seqcounter = 8192;
-		quadrangle1.powerOn();
-		quadrangle2.powerOn();
 	}
 
 	public int getSampleoffset() {
@@ -352,9 +385,13 @@ public class APU implements Component {
 
 	}
 
-	@Override
-	public void reset() {
 
+	public void powerOn() {
+		seqstep = 0;
+		seqcounter = 8192;
+		quadrangle1.powerOn();
+		quadrangle2.powerOn();
+		wave.powerOn();
 	}
 
 	public void powerOff() {
@@ -369,13 +406,19 @@ public class APU implements Component {
 		quadrangle2.write(NR22, i);
 		quadrangle2.write(NR23, i);
 		quadrangle2.write(NR24, i);
+		wave.write(NR30, i);
+		wave.write(NR31, i);
+		wave.write(NR32, i);
+		wave.write(NR33, i);
+		wave.write(NR34, i);
 	}
 
 	public byte channelstates() {
 		// TODO: other channels
 		int q1 = quadrangle1.status() ? 1 : 0;
 		int q2 = quadrangle2.status() ? 2 : 0;
-		return (byte) (q2 | q1);
+		int w = wave.status() ? 4 : 0;
+		return (byte) (w | q2 | q1);
 	}
 
 	// actually not a channel, just abusing oop
@@ -434,25 +477,10 @@ public class APU implements Component {
 			throw new RuntimeException("trololol not possibru");
 		}
 
+		@Override
+		void reset() {
+
+		}
 	}
 
-	private class Wavetables extends Channel {
-		private final byte[] table;
-
-		Wavetables() {
-			table = new byte[0x10];
-		}
-
-		@Override
-		void write(int add, byte b) {
-			table[add - 0xFF30] = b;
-
-		}
-
-		@Override
-		byte read(int add) {
-			return table[add - 0xFF30];
-		}
-
-	}
 }

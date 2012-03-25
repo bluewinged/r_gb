@@ -17,7 +17,11 @@ public class Joypad implements IOport, InputProcessor {
 	public Joypad(MemoryManager mem) {
 		this.mem = mem;
 	}
-
+	@Override
+	public void reset() {
+		joy8=0xff;
+		selection = 0x3F;
+	}
 	@Override
 	public void write(int add, byte b) {
 		//System.out.println("happens");
@@ -95,7 +99,7 @@ public class Joypad implements IOport, InputProcessor {
 	@Override
 	public boolean touchUp(int x, int y, int pointer, int button) {
 
-		return false;
+		return true;
 	}
 
 	@Override
@@ -115,4 +119,6 @@ public class Joypad implements IOport, InputProcessor {
 
 		return false;
 	}
+
+
 }

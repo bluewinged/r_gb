@@ -66,7 +66,7 @@ public class CPU implements Component {
 	public static final int IE_REG = 0xFFFF;// interrupt enable (masks)
 	public static final int IF_REG = 0xFF0F;// interrupt flag (requests)
 
-	private int delayIE;
+	//private int delayIE;
 	private boolean ime;// interrupt master enabled flag
 	private boolean halt;
 	private MemoryManager mem;
@@ -1254,6 +1254,7 @@ public class CPU implements Component {
 	 */
 	@Override
 	public void reset() {
+		halt = false;
 		ime = true;
 		pc = 0x100;
 		wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0

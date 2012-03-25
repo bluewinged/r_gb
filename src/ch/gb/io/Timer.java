@@ -29,7 +29,15 @@ public class Timer implements IOport {
 	public Timer(MemoryManager mem) {
 		this.mem = mem;
 	}
-
+	@Override
+	public void reset() {
+		div = 0;
+		tima = 0;
+		tma = 0;
+		tac = 0;
+		divcounter = 64;
+		timercounter = 1024;
+	}
 	public void clock(int cpucycles) {
 		// divider reg
 		divcounter -= cpucycles;
@@ -104,12 +112,5 @@ public class Timer implements IOport {
 
 	}
 
-	public void reset() {
-		div = 0;
-		tima = 0;
-		tma = 0;
-		tac = 0;
-		divcounter = 64;
-		timercounter = 1024;
-	}
+
 }

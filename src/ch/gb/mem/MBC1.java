@@ -52,7 +52,7 @@ public class MBC1 extends Mapper {
 		if (add < 0x2000) {
 			// RAM Enable
 			if ((b & 0xA) == 0xA) {
-				ramEnabled = true;
+				ramEnabled = true;//doesnt really matter since no acces control
 			} else {
 				ramEnabled = false;
 			}
@@ -78,7 +78,10 @@ public class MBC1 extends Mapper {
 			// ROM/RAM mode select
 			romRamMode = b & 1;
 		}
-
+		
+	}
+	private void latchRTC(){
+		
 	}
 
 	private void loadSavegame() {
