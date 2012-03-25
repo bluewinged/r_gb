@@ -59,7 +59,7 @@ public class RunGB implements ApplicationListener {
 		apu.start();
 		// @formatter:off
 		// GAMES
-		mem.loadRom("Roms/Tetris.gb");//bg bugged, sound bugged
+		//mem.loadRom("Roms/Tetris.gb");//bg bugged, sound bugged
 		// mem.loadRom("Roms/Asteroids.gb"); //works
 		//mem.loadRom("Roms/Boulder Dash (U) [!].gb");//works
 		// mem.loadRom("Roms/Missile Command (U) [M][!].gb");//works
@@ -68,7 +68,7 @@ public class RunGB implements ApplicationListener {
 		 //mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging and flickers like mad
 		//mem.loadRom("Roms/Boxxle (U) (V1.1) [!].gb");//works, 8x16 mode glitch
 		//mem.loadRom("Roms/Super Mario Land (V1.1) (JUA) [!].gb");//works
-		//mem.loadRom("Roms/Super Mario Land 2 - 6 Golden Coins (UE) (V1.2) [!].gb");//
+		mem.loadRom("Roms/Super Mario Land 2 - 6 Golden Coins (UE) (V1.2) [!].gb");//
 		//mem.loadRom("Roms/Super Mario Land 3 - Warioland (JUE) [!].gb");
 		//mem.loadRom("Roms/Tetris 2 (UE) [S][!].gb");
 		//mem.loadRom("Roms/Legend of Zelda, The - Link's Awakening.gb");

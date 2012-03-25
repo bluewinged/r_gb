@@ -58,7 +58,7 @@ public class APU implements Component {
 	private final int bitspersample = 16;
 	private int resamplerate; // 95 for 44100hz yeeeaahh
 	private int resamplecounter;
-	private final int bufferSize = 18256;
+	private final int bufferSize = 2048;
 	public final byte[] samplebuffer;
 	private int sampleoffset;
 
@@ -165,6 +165,7 @@ public class APU implements Component {
 		final Object waitlock = new Object();
 		private SourceDataLine line; // audio line
 		private final boolean isRunning;
+		private boolean requestFlush;
 
 		AudioPlaybackJava() {
 			setDaemon(true);
@@ -183,8 +184,12 @@ public class APU implements Component {
 					}
 				}
 				if (line != null) {
-					line.write(samplebuffer, 0, (sampleoffset));
-
+					if (!requestFlush) {
+						line.write(samplebuffer, 0, (sampleoffset));
+					} else {
+						requestFlush = !requestFlush;
+						line.flush();
+					}
 				} else {
 					System.out.println("line is null, shutting down audio Thread");
 					return;
@@ -209,7 +214,7 @@ public class APU implements Component {
 			DataLine.Info info = new DataLine.Info(SourceDataLine.class, format, samplerate);
 			try {
 				line = (SourceDataLine) AudioSystem.getLine(info);
-				line.open(format);//TODO: use fixed size Audio buffers
+				line.open(format);// TODO: use fixed size Audio buffers
 				line.start();
 			} catch (LineUnavailableException e) {
 				e.printStackTrace();
@@ -227,7 +232,7 @@ public class APU implements Component {
 
 		@Override
 		public void discardSamples() {
-			line.flush();
+			requestFlush = true;
 		}
 
 		@Override
@@ -236,8 +241,8 @@ public class APU implements Component {
 				waitlock.notify();
 			}
 		}
-
 	}
+	
 
 	public void flush() {
 		audio.flush();
@@ -306,7 +311,7 @@ public class APU implements Component {
 			// FreqMeter.measure();
 			float q1 = accumsq1 / ((float) (accumcycles * 15));
 			float q2 = accumsq2 / ((float) (accumcycles * 15));// 15 is max
-			float chanL = (q2);
+			float chanL = (q1);
 			// System.out.println(q2);
 			accumcycles = 0;
 			accumsq1 = 0;
@@ -324,13 +329,10 @@ public class APU implements Component {
 			samplebuffer[sampleoffset++] = (byte) (sample & 0xff);
 			samplebuffer[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
 			// overflowcontrol
-			if (sampleoffset - 2 == samplebuffer.length - 2) {
+			if (sampleoffset == samplebuffer.length) {
+				audio.discardSamples();//too speed up resync?
 				sampleoffset = 0;
-				// probably not necessary
-				audio.discardSamples();// let audio thread discard samples to
-										// catch up
 			}
-
 		}
 	}
 
