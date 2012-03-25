@@ -1,5 +1,7 @@
 package ch.gb.apu;
 
+import ch.gb.utils.Utils;
+
 public class Square extends Channel {
 	private int duty;
 	private int freq = 0;
@@ -12,8 +14,9 @@ public class Square extends Channel {
 	private int envcounter = 0;
 	private boolean envtriggered = true;
 
+	private final int lengthEnabled = 0x40;
 	private int lc;
-	private boolean lengthEnable; // also channel enabled flag (?)
+	private boolean enabled; // also channel enabled flag (?)
 
 	private int sequencer;
 	private int sqsample;
@@ -28,6 +31,16 @@ public class Square extends Channel {
 		sequencer = 0;
 	}
 
+	private boolean dacEnabled(byte b) {
+		return (b & 0xF8) != 0;
+	}
+
+	private int reloadEnv() {
+		int period = nr2 & 7;
+		envcounter = (period != 0 ? period : 8);
+		return period;
+	}
+
 	@Override
 	void write(int add, byte b) {
 		if (add == 0xFF10 + off) {
@@ -40,10 +53,9 @@ public class Square extends Channel {
 			nr2 = b;
 			envvol = (b >> 4) & 0xf;
 			envadd = (b & 8) == 8 ? 1 : -1;
-			envperiod = b & 3;
-			if ((b & 0xF8) == 0) { // check DAC
-				lengthEnable = false;
-			}
+			envperiod = b & 7;
+			if (!dacEnabled(b))
+				enabled = false;
 		} else if (add == 0xFF13 + off) {
 			nr3 = b;
 			freq &= 0x700;
@@ -51,35 +63,37 @@ public class Square extends Channel {
 			period = (2048 - freq) * 4;
 
 		} else if (add == 0xFF14 + off) {
+			// System.out.println(Utils.dumpHex(b));
 			nr4 = b;
 			freq &= 0xff;
 			freq |= ((b & 7) << 8);
 			period = (2048 - freq) * 4;
 
-			lengthEnable = (b & 0x40) == 0x40;
-
+			// enabled = (b & 0x40) == 0x40;//TODO: fixes tetris oo? that isnt
+			// correct i think
 			if ((b & 0x80) == 0x80) {// trigger
+				nr4 &= 0x7F;// clear trigger flag
+
 				envtriggered = true;
-				lengthEnable = true;
+				enabled = true;
+				// System.out.println(lc);
 				if (lc == 0)
 					lc = 64;
-
 				divider = period;// TODO:low 2 bits are not modified
-				envperiod = nr2 & 3;// reload env period
+				reloadEnv();
 				envvol = (nr2 >> 4) & 0xf;// reload volume
 				// TODO: sweep does some stuff
 
-				if ((b & 0xF8) == 0) {// check DAC
-					lengthEnable = false;
-					lc = 0;
-				}
+				if (!dacEnabled(b))
+					enabled = false;
+
 			}
 		}
 	}
 
 	@Override
 	byte read(int add) {
-		// System.out.println("anything?"+Utils.dumpHex(add));
+		System.out.println("anything?" + Utils.dumpHex(add));
 		if (add == 0xFF10 + off) {
 			return off == 5 ? (byte) (nr0 | 0xff) : (byte) (nr0 | 0x80);
 		} else if (add == 0xFF11 + off) {
@@ -90,7 +104,7 @@ public class Square extends Channel {
 			return (byte) (nr3 | 0xff);
 		} else if (add == 0xFF14 + off) {
 			// System.out.println("pololo");
-			return (byte) (nr4 | 0xBF | (lengthEnable ? 0x40 : 0));
+			return (byte) (nr4 | 0xBF | (enabled ? 0x40 : 0));
 		} else {
 			throw new RuntimeException("hurrdurr");
 		}
@@ -106,11 +120,11 @@ public class Square extends Channel {
 	}
 
 	void clocklen() {
-		if (lengthEnable && lc > 0)
-			lc--;
-		if (lc == 0) {
-			lengthEnable = false;
+		if ((nr4 & lengthEnabled) != 0 && lc != 0) {// length enabled
+			if (--lc <= 0)
+				enabled = false;
 		}
+
 	}
 
 	void clockenv() {
@@ -130,11 +144,11 @@ public class Square extends Channel {
 	}
 
 	public boolean status() {
-		return lengthEnable;
+		return enabled;
 	}
 
 	int poll() {
-		return lengthEnable ? sqsample * envvol : 0;
+		return enabled ? sqsample * envvol : 0;
 	}
 
 }

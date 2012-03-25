@@ -50,7 +50,8 @@ public class APU implements Component {
 	public static final int NR51 = 0xFF25;
 	public static final int NR52 = 0xFF26;
 
-	private SourceDataLine line; // audio line
+	public static final int MONO = 1;
+	public static final int STEREO = 2;
 
 	private final int samplerate = 44100;
 	private final int numChannels = 1;
@@ -72,14 +73,17 @@ public class APU implements Component {
 	private final Wave wave;
 	private final PowerControl powercontrol;
 	private final Wavetables wt;
-	
-	private Thread AudioThread;
+
+	private final AudioPlaybackJava audio;
 
 	public APU() {
 		samplebuffer = new byte[bufferSize];
 
+		audio = new AudioPlaybackJava();
+
 		quadrangle1 = new Square(false);
 		quadrangle2 = new Square(true);
+
 		noise = new Noise();
 		wave = new Wave();
 		powercontrol = new PowerControl(this);
@@ -138,46 +142,116 @@ public class APU implements Component {
 	public void write(int add, byte b) {
 		if (add >= NR10 && add <= NR51 && !powercontrol.powerstatus)
 			return;
-		if(add>=0xFF27 && add <=0xFF2F)
+		if (add >= 0xFF27 && add <= 0xFF2F)
 			return;
-		//System.out.println(Utils.dumpHex(add));
+		// System.out.println(Utils.dumpHex(add));
 		iochannel.get(add).write(add, b);
 	}
 
 	public byte read(int add) {
-		if(add>=0xFF27 && add <=0xFF2F){
+		if (add >= 0xFF27 && add <= 0xFF2F) {
 			return 0;
 		}
 		return iochannel.get(add).read(add);
 	}
 
-	public void start() {
-		if (line != null) {
-			return;
-		}
-		// AudioFormat format = new AudioFormat(samplerate, bitspersample,
-		// numChannels, true, false);
-		AudioFormat format = new AudioFormat(Encoding.PCM_SIGNED, samplerate, bitspersample, 1, 2, samplerate, false);
-		// downsampling: cpu freq -> 44'100hz
-		resamplecounter = resamplerate = (CPU.CLOCK / samplerate);
+	/**
+	 * Audio playback with the java audio api
+	 * 
+	 * @author bluew
+	 * 
+	 */
+	private class AudioPlaybackJava extends Thread implements AudioPlayback {
+		final Object waitlock = new Object();
+		private SourceDataLine line; // audio line
+		private final boolean isRunning;
 
-		DataLine.Info info = new DataLine.Info(SourceDataLine.class, format, samplerate);
-		try {
-			line = (SourceDataLine) AudioSystem.getLine(info);
-			line.open(format);
-			line.start();
-		} catch (LineUnavailableException e) {
-			e.printStackTrace();
+		AudioPlaybackJava() {
+			setDaemon(true);
+			isRunning = true;
+			start();
 		}
+
+		@Override
+		public void run() {
+			while (isRunning) {
+				synchronized (waitlock) {
+					try {
+						waitlock.wait();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+				if (line != null) {
+					line.write(samplebuffer, 0, (sampleoffset));
+
+				} else {
+					System.out.println("line is null, shutting down audio Thread");
+					return;
+				}
+				sampleoffset = 0;
+			}
+			stopPlayback();
+		}
+
+		@Override
+		public void startPlayback() {
+			if (line != null) {
+				return;
+			}
+			// AudioFormat format = new AudioFormat(samplerate, bitspersample,
+			// numChannels, true, false);
+			AudioFormat format = new AudioFormat(Encoding.PCM_SIGNED, samplerate, bitspersample, numChannels, 2,
+					samplerate, false);
+			// downsampling: cpu freq -> 44'100hz
+			resamplecounter = resamplerate = (CPU.CLOCK / samplerate);
+
+			DataLine.Info info = new DataLine.Info(SourceDataLine.class, format, samplerate);
+			try {
+				line = (SourceDataLine) AudioSystem.getLine(info);
+				line.open(format);//TODO: use fixed size Audio buffers
+				line.start();
+			} catch (LineUnavailableException e) {
+				e.printStackTrace();
+			}
+		}
+
+		@Override
+		public void stopPlayback() {
+			if (line != null) {
+				line.flush();
+				line.drain();
+				line.close();
+			}
+		}
+
+		@Override
+		public void discardSamples() {
+			line.flush();
+		}
+
+		@Override
+		public void flush() {
+			synchronized (waitlock) {
+				waitlock.notify();
+			}
+		}
+
+	}
+
+	public void flush() {
+		audio.flush();
+	}
+
+	public void start() {
+		audio.startPlayback();
 	}
 
 	public void stop() {
-		if (line != null) {
-			line.drain();
-			line.close();
-		}
+		audio.stopPlayback();
 	}
 
+	private int accumsq1;
 	private int accumsq2;
 	private int accumcycles;
 
@@ -189,68 +263,82 @@ public class APU implements Component {
 			seqstep = (seqstep + 1) & 7;
 			switch (seqstep) {
 			case 0:
+				quadrangle1.clocklen();
 				quadrangle2.clocklen();
 				break;// clock len
 			case 1:
 				break;
 			case 2:
+				quadrangle1.clocklen();
 				quadrangle2.clocklen();
 				break;// clock len clock sweep
 			case 3:
 				break;
 			case 4:
+				quadrangle1.clocklen();
 				quadrangle2.clocklen();
 				break;// clock len
 			case 5:
 				break;
 			case 6:
+				quadrangle1.clocklen();
 				quadrangle2.clocklen();
 				break;// clock len clock sweep
 			case 7:
+				quadrangle1.clockenv();
 				quadrangle2.clockenv();
 				break;// clock env
 			}
 
 		}
 		if (powercontrol.powerstatus) {
+			quadrangle1.clock(cpucycles);
 			quadrangle2.clock(cpucycles);
 		}
-
-		accumsq2 += quadrangle2.poll()*cpucycles;
+		accumsq1 += quadrangle1.poll() * cpucycles;
+		accumsq2 += quadrangle2.poll() * cpucycles;
 
 		accumcycles += cpucycles;
 
-		resamplecounter-=cpucycles;
+		resamplecounter -= cpucycles;
 		if (resamplecounter <= 0) {
 			resamplecounter += resamplerate;
-			//FreqMeter.measure();
-			float q2 = accumsq2/((float)(accumcycles*15));
-			//System.out.println(q2);
-			accumcycles=0;
-			accumsq2=0;
-			
-			float usample =Audio.blockDC((q2 * 65535)- 32768 );
-			if (usample > 32767-1) {
-				usample = 32767-1;
+			// FreqMeter.measure();
+			float q1 = accumsq1 / ((float) (accumcycles * 15));
+			float q2 = accumsq2 / ((float) (accumcycles * 15));// 15 is max
+			float chanL = (q2);
+			// System.out.println(q2);
+			accumcycles = 0;
+			accumsq1 = 0;
+			accumsq2 = 0;
+
+			float usample = Audio.blockDC((chanL * 65535) - 32768);
+			if (usample > 32767 - 1) {
+				usample = 32767 - 1;
 			}
-			if (usample < -32768-2) {
-				usample = -32768-2;
+			if (usample < -32768 - 2) {
+				usample = -32768 - 2;
 			}
 			int sample = (int) usample;
 			// System.out.println(sample);
 			samplebuffer[sampleoffset++] = (byte) (sample & 0xff);
 			samplebuffer[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
+			// overflowcontrol
+			if (sampleoffset - 2 == samplebuffer.length - 2) {
+				sampleoffset = 0;
+				// probably not necessary
+				audio.discardSamples();// let audio thread discard samples to
+										// catch up
+			}
 
 		}
 	}
 
-	public void flush() {//can block, better in a thread
-		if (line != null) {
-			line.write(samplebuffer, 0, sampleoffset);
-		} else {
-			System.out.println("line is null");
-		}
-		sampleoffset = 0;
+	public void powerOn() {
+		seqstep = 0;
+		seqcounter = 8192;
+		quadrangle1.powerOn();
+		quadrangle2.powerOn();
 	}
 
 	public int getSampleoffset() {
@@ -267,24 +355,25 @@ public class APU implements Component {
 
 	}
 
-	public void powerOn() {
-		seqstep = 0;
-		seqcounter = 8192;
-		quadrangle2.powerOn();
-	}
-
 	public void powerOff() {
 		byte i = 0;
-		quadrangle2.write(NR10, i);
-		quadrangle2.write(NR11, i);
-		quadrangle2.write(NR12, i);
-		quadrangle2.write(NR13, i);
-		quadrangle2.write(NR14, i);
+		quadrangle1.write(NR10, i);
+		quadrangle1.write(NR11, i);
+		quadrangle1.write(NR12, i);
+		quadrangle1.write(NR13, i);
+		quadrangle1.write(NR14, i);
+		quadrangle2.write(NR20, i);
+		quadrangle2.write(NR21, i);
+		quadrangle2.write(NR22, i);
+		quadrangle2.write(NR23, i);
+		quadrangle2.write(NR24, i);
 	}
-	public byte channelstates(){
-		//TODO: other channel
-		int q2 = quadrangle2.status()?2:0;
-		return (byte)q2;
+
+	public byte channelstates() {
+		// TODO: other channels
+		int q1 = quadrangle1.status() ? 1 : 0;
+		int q2 = quadrangle2.status() ? 2 : 0;
+		return (byte) (q2 | q1);
 	}
 
 	// actually not a channel, just abusing oop
@@ -317,7 +406,7 @@ public class APU implements Component {
 				nr51 = b;
 			} else if (add == NR52) {
 				nr52 = b;
-				//System.out.println("NR52:" + Utils.dumpHex(b));
+				// System.out.println("NR52:" + Utils.dumpHex(b));
 				boolean oldstatus = powerstatus;
 				powerstatus = (b & 0x80) == 0x80;
 				if (oldstatus != powerstatus) {
@@ -337,8 +426,8 @@ public class APU implements Component {
 			} else if (add == NR51) {
 				return (byte) (nr51 | 0x00);
 			} else if (add == NR52) {
-				//System.out.println("want read");
-				return (byte) (channelstates()| nr52 | 0x70);
+				// System.out.println("want read");
+				return (byte) (channelstates() | nr52 | 0x70);
 			}
 			throw new RuntimeException("trololol not possibru");
 		}

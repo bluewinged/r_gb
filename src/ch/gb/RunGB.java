@@ -59,7 +59,7 @@ public class RunGB implements ApplicationListener {
 		apu.start();
 		// @formatter:off
 		// GAMES
-		//mem.loadRom("Roms/Tetris.gb");//bg bugged
+		mem.loadRom("Roms/Tetris.gb");//bg bugged, sound bugged
 		// mem.loadRom("Roms/Asteroids.gb"); //works
 		//mem.loadRom("Roms/Boulder Dash (U) [!].gb");//works
 		// mem.loadRom("Roms/Missile Command (U) [M][!].gb");//works
@@ -67,7 +67,7 @@ public class RunGB implements ApplicationListener {
 		//mem.loadRom("Roms/Amida (J).gb");//works but crappy game
 		 //mem.loadRom("Roms/Castelian (E) [!].gb");//halt is bugging and flickers like mad
 		//mem.loadRom("Roms/Boxxle (U) (V1.1) [!].gb");//works, 8x16 mode glitch
-		//mem.loadRom("Roms/Super Mario Land (V1.1) (JUA) [!].gb");//works, sligthy glitch (vlbank?)
+		//mem.loadRom("Roms/Super Mario Land (V1.1) (JUA) [!].gb");//works
 		//mem.loadRom("Roms/Super Mario Land 2 - 6 Golden Coins (UE) (V1.2) [!].gb");//
 		//mem.loadRom("Roms/Super Mario Land 3 - Warioland (JUE) [!].gb");
 		//mem.loadRom("Roms/Tetris 2 (UE) [S][!].gb");
@@ -108,11 +108,11 @@ public class RunGB implements ApplicationListener {
 		// GRAPHICS
 		// mem.loadRom("Testroms/graphicskev/gbtest.gb");
 
-		//SOUND
-		 //mem.loadRom("Testroms/sound/dmg_sound.gb");
-		//mem.loadRom("Testroms/sound/01-registers.gb");
-		//mem.loadRom("Testroms/sound/02-len ctr.gb");
-		
+		// SOUND
+		// mem.loadRom("Testroms/sound/dmg_sound.gb");
+		// mem.loadRom("Testroms/sound/01-registers.gb");
+		// mem.loadRom("Testroms/sound/02-len ctr.gb");
+
 		// general SYSTEST
 		// mem.loadRom("Testroms/systest/test.gb");//not supported
 
@@ -214,8 +214,8 @@ public class RunGB implements ApplicationListener {
 
 		// shift buffer left by limit
 		for (int y = 0; y < 65; y++) {
-			for (int x =0; x < 256; x++) {
-			//	wave[x - limit][y] = wave[x][y];
+			for (int x = 0; x < 256; x++) {
+				// wave[x - limit][y] = wave[x][y];
 				wave[x][y] = 0xFFFFFFFF;
 			}
 		}
@@ -248,10 +248,13 @@ public class RunGB implements ApplicationListener {
 				gpu.tick(cycles);
 				apu.tick(cycles);
 				cpuacc += cycles;
+				//if (apu.getSampleoffset() > 2000)
 				
 			}
-			doDebugWaveforms();
+			//System.out.println(apu.getSampleoffset());
 			apu.flush();
+			doDebugWaveforms();
+
 			cpuacc -= framerate;
 			clock++;
 			fontalpha -= 0.003f;
