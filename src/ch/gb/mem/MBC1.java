@@ -1,13 +1,15 @@
 package ch.gb.mem;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.regex.Pattern;
 
 import ch.gb.Settings;
+import ch.gb.utils.RessourceLoader;
 import ch.gb.utils.Utils;
-
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.files.FileHandle;
 
 public class MBC1 extends Mapper {
 	private int rombank = 1;
@@ -42,7 +44,7 @@ public class MBC1 extends Mapper {
 			}
 			switch8kRam(ram[0]);
 		}
-		loadSavegame();
+		loadRam();
 	}
 
 	@Override
@@ -80,23 +82,29 @@ public class MBC1 extends Mapper {
 		}
 		
 	}
-	private void latchRTC(){
-		
-	}
 
-	private void loadSavegame() {
+
+	@Override
+	public void loadRam() {
 		if (!saveable)
 			return;
 		String filename = rom.getLoadPath();
-		String[] splits = filename.split("/");
+		String[] splits = filename.split(Pattern.quote(File.separator));
 		filename = Utils.removeExtension(splits[splits.length - 1]);
 		filename += ".sav";
 		
-		FileHandle filehandle = Gdx.files.external(Settings.root+filename);
-		if (!filehandle.exists())
+		//FileHandle filehandle = Gdx.files.external(Settings.root+filename);
+		//if (!filehandle.exists())
+			//return;
+
+		//InputStream is = filehandle.read();
+		InputStream is = null;
+		try {
+			is = RessourceLoader.load(Settings.root+File.separatorChar+filename);
+		} catch (FileNotFoundException e1) {
+			System.out.println("No savegame found");
 			return;
-		
-		InputStream is = filehandle.read();
+		}
 
 		try {
 			for (int i = 0; i < numRamBanks; i++) {
@@ -109,6 +117,41 @@ public class MBC1 extends Mapper {
 			e.printStackTrace();
 		}
 		System.out.println("Found existing savegame and loaded it");
+	}
+	@Override
+	public void saveRam() {
+		if (rom != null ) {
+			if (getNumRamBanks() == 0 ||!hasSramOrBattery()) {
+				return;
+			}
+			String filename = rom.getLoadPath();
+			String[] splits = filename.split(Pattern.quote(File.separator));
+			filename = Utils.removeExtension(splits[splits.length - 1]);
+			filename += ".sav";
+			System.out.println("Filename:"+filename);
+			//FileHandle filehandle = Gdx.files.external(Settings.root + filename);
+
+
+			//OutputStream os = filehandle.write(false);
+			OutputStream os = null;
+			try {
+				os = RessourceLoader.write(Settings.root+File.separatorChar+filename);
+			} catch (FileNotFoundException e1) {
+				System.out.println("Couldnt save Ram");
+				return;
+			}
+			try {
+				for (int i = 0; i < getNumRamBanks(); i++) {
+					os.write(getRam()[i]);
+				}
+				os.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			//System.out.println("Saved Ram in " + filename);
+			//System.out.println("Path:" + filehandle.path() + " -> relative to user/<username>/");
+		}
 	}
 
 	@Override
@@ -125,5 +168,9 @@ public class MBC1 extends Mapper {
 	public byte[][] getRam() {
 		return hasRam ? ram : null;
 	}
+
+
+
+
 
 }

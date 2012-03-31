@@ -20,24 +20,25 @@ public abstract class Mapper {
 		Mapper mbc = null;
 		switch (rom.getType()) {
 		case 0x00:
-			mbc = new RomOnly();//ROM
+			mbc = new RomOnly();// ROM
 			break;
 		case 0x01:
-			mbc = new MBC1(false,false);//MBC1
+			mbc = new MBC1(false, false);// MBC1
 			break;
-		case 0x02://MBC1 + RAM
-			mbc = new MBC1(true,false);
+		case 0x02:// MBC1 + RAM
+			mbc = new MBC1(true, false);
 			break;
-		case 0x03://MBC1 + RAM + BATTERY
-			mbc = new MBC1(true,true);
+		case 0x03:// MBC1 + RAM + BATTERY
+			mbc = new MBC1(true, true);
 			break;
 		}
-		
+
 		mbc.setMem(mem);
 		mbc.setRom(rom);
-		mbc.init();//load initial banks
+		mbc.init();// load initial banks
 		return mbc;
 	}
+
 	public abstract void init();
 
 	public abstract void write(int add, byte b);
@@ -45,12 +46,18 @@ public abstract class Mapper {
 	protected void switch16kRom(int bankaddr, byte[] newbank) {
 		mem.rombanks[bankaddr] = newbank;
 	}
-	protected void switch8kRam(byte[] newbank){
+
+	protected void switch8kRam(byte[] newbank) {
 		mem.exram = newbank;
 	}
+
 	public abstract int getNumRamBanks();
+
 	public abstract byte[][] getRam();
+
 	public abstract boolean hasSramOrBattery();
+	public abstract void loadRam();
+	public abstract void saveRam();
 
 	public void setMem(MemoryManager mem) {
 		this.mem = mem;

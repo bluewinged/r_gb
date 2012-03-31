@@ -5,6 +5,11 @@ public class Audio {
 	private static float lastOut=0;
 
 	//Beannich
+	/**
+	 * Block DC component of an audio signal
+	 * @param sample
+	 * @return
+	 */
 	public static float blockDC(float sample) {
 		float output = sample - lastAmp + 0.999f * lastOut;
 		lastAmp = sample;

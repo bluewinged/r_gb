@@ -1,9 +1,9 @@
 package ch.gb.mem;
 
 public class MBC3 extends Mapper {
-	private  int rombank = 1;
-	private  int rtcRamMode = 0;
-	private boolean ramEnabled = false;
+	private int rombank = 1;
+	private int rtcRamMode = 0;
+	private boolean ramAndRtcEnabled = false;
 
 	private int numRamBanks = 0;
 	private int ramsize;
@@ -21,7 +21,7 @@ public class MBC3 extends Mapper {
 	public void init() {
 		switch16kRom(ROM_0x0000, rom.get16kRomBank(0));
 		switch16kRom(ROM_0x4000, rom.get16kRomBank(1));
-		
+
 		if (hasRam) {
 			ramsize = rom.getRamSize();
 			if (ramsize > 0x2000) {// split in banks
@@ -40,28 +40,22 @@ public class MBC3 extends Mapper {
 	public void write(int add, byte b) {
 		if (add < 0x2000) {
 			// RAM Enable
-			if ((b&0xff)==0xA) {
-				ramEnabled = true;
-			} else if(b==0){
-				ramEnabled = false;
+			if ((b & 0xff) == 0xA) {
+				ramAndRtcEnabled = true;
+			} else if (b == 0) {
+				ramAndRtcEnabled = false;
 			}
 		} else if (add < 0x4000) {
 
 			// select ROM bank number (all 7 bits)
-			rombank =b&0x7f;
+			rombank = b & 0x7f;
 			if (rombank == 0x00)
 				rombank++;
-			switch16kRom(ROM_0x4000, rom.get16kRomBank(rombank%rom.get16kRomNum()));//wrapping fix
+			switch16kRom(ROM_0x4000, rom.get16kRomBank(rombank % rom.get16kRomNum()));// wrapping
+																						// fix
 
 		} else if (add < 0x6000) {
-			b &= 3;// 2bit reg
-			// select RAM bank number or Upper bits of ROM bank
-			if (rtcRamMode == 0) {// ROM mode
-				rombank |= (b << 5);
-				switch16kRom(ROM_0x4000, rom.get16kRomBank(rombank));
-			} else { // RAM mode
-				switch8kRam(ram[b % numRamBanks]);
-			}
+
 		} else if (add < 0x8000) {
 			// ROM/RAM mode select
 			rtcRamMode = b & 1;
@@ -81,5 +75,17 @@ public class MBC3 extends Mapper {
 	@Override
 	public byte[][] getRam() {
 		return hasRam ? ram : null;
+	}
+
+	@Override
+	public void loadRam() {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void saveRam() {
+		// TODO Auto-generated method stub
+
 	}
 }

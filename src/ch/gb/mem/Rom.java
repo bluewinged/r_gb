@@ -1,5 +1,6 @@
 package ch.gb.mem;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -38,9 +39,18 @@ public class Rom {
 		load(path);
 	}
 
-	private void load(String path) {
+	private boolean load(String path) {
 		// FileHandle file = Gdx.files.internal(path);
-		InputStream is = RessourceLoader.load(path);// file.read();
+		//if(!path.endsWith(".gb") || !path.endsWith(".gbc"))
+			//return false;
+	
+		InputStream is=null;
+		try {
+			is = RessourceLoader.load(path);
+		} catch (FileNotFoundException e1) {
+			e1.printStackTrace();
+			return false;
+		}// file.read();
 		byte[] tmp = new byte[0x10];
 		// get header
 		// file.readBytes(header, 0x0, 0x150);
@@ -105,6 +115,7 @@ public class Rom {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		return true;
 	}
 
 	public String getLoadPath() {
@@ -293,7 +304,7 @@ public class Rom {
 		add-=header[0x14F];
 		//System.out.println(Utils.dumpHex(d&0xffff));
 		//System.out.println(Utils.dumpHex(add&0xffff));
-		return (add&0xffff)==(d&0xffff)?"(CORRECT) - not reliable":"(FAILED) - not reliable";
+		return (add&0xffff)==(d&0xffff)?"(CORRECT)":"(FAILED)";//TODO: buggy
 	}
 	
 }

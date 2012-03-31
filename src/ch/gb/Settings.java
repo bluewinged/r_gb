@@ -6,7 +6,7 @@ import com.badlogic.gdx.Input.Keys;
 
 public class Settings {
 	public static HashMap<Integer, Integer> joymap;
-	public static String root = "rgbsavegames/";
+	public static String root = "savegames/";
 	static {
 		// default Joypad mapping
 		// 7: start
@@ -28,12 +28,16 @@ public class Settings {
 		joymap.put(Keys.SHIFT_RIGHT, 6);
 		joymap.put(Keys.ENTER, 7);
 	}
+	public static int numChannels=1;
+	public static int samplingrate = 44100;
 	public static float mastervolume = 1f;// between 0 and 1
 	public static int ch1enable = 1;// 0 disabled, 1 enabled,
 	public static int ch2enable = 1;
 	public static int ch3enable = 1;
 	public static int ch4enable = 1;
+	
 	public static int speedup = 10;
+	public static int zoom = 2;
 	
 	
 	public static boolean checkSettings(){

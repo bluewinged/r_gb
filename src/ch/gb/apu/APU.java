@@ -1,5 +1,6 @@
 package ch.gb.apu;
 
+import java.util.Arrays;
 import java.util.HashMap;
 
 import javax.sound.sampled.AudioFormat;
@@ -14,6 +15,9 @@ import ch.gb.GBComponents;
 import ch.gb.Settings;
 import ch.gb.cpu.CPU;
 import ch.gb.utils.Audio;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.audio.AudioDevice;
 
 public class APU implements Component {
 
@@ -54,13 +58,14 @@ public class APU implements Component {
 	public static final int MONO = 1;
 	public static final int STEREO = 2;
 
-	private final int samplerate = 44100;
+	private final int samplingrate = 44100;
 	private final int numChannels = 1;
 	private final int bitspersample = 16;
 	private int resamplerate; // 95 for 44100hz yeeeaahh
 	private int resamplecounter;
 	private final int bufferSize = 2048;
-	public byte[] samplebuffer;
+	public byte[] samplebuffer8;
+	public short[] samplebuffer16;
 	private int sampleoffset;
 
 	private int seqstep;
@@ -77,7 +82,8 @@ public class APU implements Component {
 	private AudioPlaybackJava audio;
 
 	public APU() {
-		samplebuffer = new byte[bufferSize];
+		samplebuffer8 = new byte[bufferSize];
+		samplebuffer16 = new short[bufferSize / 2];
 
 		audio = new AudioPlaybackJava();
 
@@ -136,26 +142,27 @@ public class APU implements Component {
 		iochannel.put(0xFF3F, wave);
 
 	}
+
 	@Override
 	public void reset() {
-		seqstep=0;
+		seqstep = 0;
 		seqcounter = 8192;
 		audio.discardSamples();
 		audio.stopPlayback();
 		audio = new AudioPlaybackJava();
 		audio.startPlayback();
-		samplebuffer = new byte[bufferSize];
-		
+		samplebuffer8 = new byte[bufferSize];
+
 		quadrangle1.reset();
 		quadrangle2.reset();
 		wave.reset();
 		noise.reset();
-		
-		accumsq1=0;
-		accumsq2=0;
-		accumwave=0;
+
+		accumsq1 = 0;
+		accumsq2 = 0;
+		accumwave = 0;
 	}
-	
+
 	public void write(int add, byte b) {
 		if (add >= NR10 && add <= NR51 && !powercontrol.powerstatus)
 			return;
@@ -181,7 +188,7 @@ public class APU implements Component {
 	private class AudioPlaybackJava extends Thread implements AudioPlayback {
 		final Object waitlock = new Object();
 		private SourceDataLine line; // audio line
-		private boolean isRunning;
+		private final boolean isRunning;
 		private boolean requestFlush;
 
 		AudioPlaybackJava() {
@@ -202,7 +209,8 @@ public class APU implements Component {
 				}
 				if (line != null) {
 					if (!requestFlush) {
-						line.write(samplebuffer, 0, (sampleoffset));
+						//System.out.println(line.available());
+						line.write(samplebuffer8, 0, (sampleoffset));
 					} else {
 						requestFlush = !requestFlush;
 						line.flush();
@@ -223,12 +231,12 @@ public class APU implements Component {
 			}
 			// AudioFormat format = new AudioFormat(samplerate, bitspersample,
 			// numChannels, true, false);
-			AudioFormat format = new AudioFormat(Encoding.PCM_SIGNED, samplerate, bitspersample, numChannels, 2,
-					samplerate, false);
+			AudioFormat format = new AudioFormat(Encoding.PCM_SIGNED, samplingrate, bitspersample, numChannels, 2,
+					samplingrate, false);
 			// downsampling: cpu freq -> 44'100hz
-			resamplecounter = resamplerate = (CPU.CLOCK / samplerate);
+			resamplecounter = resamplerate = (CPU.CLOCK / samplingrate);
 
-			DataLine.Info info = new DataLine.Info(SourceDataLine.class, format, samplerate);
+			DataLine.Info info = new DataLine.Info(SourceDataLine.class, format, samplingrate);
 			try {
 				line = (SourceDataLine) AudioSystem.getLine(info);
 				line.open(format);// TODO: use fixed size Audio buffers
@@ -245,7 +253,8 @@ public class APU implements Component {
 				line.drain();
 				line.close();
 			}
-			isRunning = false;
+			line = null;
+			// isRunning = false;
 		}
 
 		@Override
@@ -261,6 +270,63 @@ public class APU implements Component {
 		}
 	}
 
+	private class AudioPlaybackOpenAL extends Thread implements AudioPlayback {
+		private AudioDevice device;
+		private final boolean isRunning;
+		final Object waitlock = new Object();
+
+		public AudioPlaybackOpenAL() {
+			setDaemon(true);
+			isRunning = true;
+			start();
+		}
+
+		@Override
+		public void run() {
+			while (isRunning) {
+				synchronized (waitlock) {
+					try {
+						waitlock.wait();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+				//device.writeSamples(samples, offset, numSamples)
+				device.writeSamples(samplebuffer16, 0, (sampleoffset/2));
+				
+			}
+		}
+
+		@Override
+		public void startPlayback() {
+			if (device != null) {
+				return;
+			}
+			device = Gdx.audio.newAudioDevice(samplingrate, numChannels == 1);
+			//device.writeSamples(samples, offset, numSamples)
+			// device.writeSamples(samples, offset, numSamples)
+		}
+
+		@Override
+		public void stopPlayback() {
+			device.dispose();
+			device = null;
+		}
+
+		@Override
+		public void flush() {
+			synchronized (waitlock) {
+				waitlock.notify();
+			}
+		}
+
+		@Override
+		public void discardSamples() {
+			// TODO Auto-generated method stub
+		}
+
+	}
+
 	public void flush() {
 		audio.flush();
 	}
@@ -272,7 +338,8 @@ public class APU implements Component {
 	public void stop() {
 		audio.stopPlayback();
 	}
-	public void discard(){
+
+	public void discard() {
 		audio.discardSamples();
 	}
 
@@ -364,11 +431,14 @@ public class APU implements Component {
 			}
 			int sample = (int) usample;
 			// ONLY MONO supported for now
-			samplebuffer[sampleoffset++] = (byte) (sample & 0xff);
-			samplebuffer[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
+			//samplebuffer16[sampleoffset/2]=(short)(sample&0xffff);
+			samplebuffer8[sampleoffset++] = (byte) (sample & 0xff);
+			samplebuffer8[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
 			// overflowcontrol
-			if (sampleoffset == samplebuffer.length) {
+			if (sampleoffset == samplebuffer8.length) {
 				//System.out.println("Audio BufferOVERFLOW");
+				Arrays.fill(samplebuffer8,(byte)0);
+				//Arrays.fill(samplebuffer16, (short)0);
 				audio.discardSamples();// too speed up resync?//TODO: SPEED MODUS disturbs later sound output
 				sampleoffset = 0;
 			}
@@ -384,7 +454,6 @@ public class APU implements Component {
 	public void link(GBComponents comps) {
 
 	}
-
 
 	public void powerOn() {
 		seqstep = 0;

@@ -32,4 +32,16 @@ public class RomOnly extends Mapper {
 		return false;
 	}
 
+	@Override
+	public void loadRam() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void saveRam() {
+		// TODO Auto-generated method stub
+		
+	}
+
 }

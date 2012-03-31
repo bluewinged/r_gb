@@ -1,13 +1,10 @@
 package ch.gb.mem;
 
-import java.io.IOException;
-import java.io.OutputStream;
 import java.util.HashMap;
 
 import ch.gb.Component;
 import ch.gb.GB;
 import ch.gb.GBComponents;
-import ch.gb.Settings;
 import ch.gb.apu.APU;
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
@@ -17,9 +14,6 @@ import ch.gb.io.Serial;
 import ch.gb.io.SpriteDma;
 import ch.gb.io.Timer;
 import ch.gb.utils.Utils;
-
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.files.FileHandle;
 
 /**
  * Contains CPU memory and manages all writes to it
@@ -264,30 +258,8 @@ public class MemoryManager implements Component {
 	}
 
 	public void saveRam() {
-		if (rom != null && mbc != null) {
-			if (mbc.getNumRamBanks() == 0 || !mbc.hasSramOrBattery()) {
-				return;
-			}
-			String filename = rom.getLoadPath();
-			String[] splits = filename.split("/");
-			filename = Utils.removeExtension(splits[splits.length - 1]);
-			filename += ".sav";
-
-			FileHandle filehandle = Gdx.files.external(Settings.root + filename);
-
-			// Gdx.files.external
-			OutputStream os = filehandle.write(false);
-			try {
-				for (int i = 0; i < mbc.getNumRamBanks(); i++) {
-					os.write(mbc.getRam()[i]);
-				}
-				os.close();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			System.out.println("Saved Ram in " + filename);
-			System.out.println("Path:" + filehandle.path() + " -> relative to user/<username>/");
+		if(mbc!=null){
+			mbc.saveRam();
 		}
 	}
 
