@@ -1,6 +1,24 @@
+/*******************************************************************************
+ *     <A simple gameboy emulator>
+ * 
+ *     This program is free software: you can redistribute it and/or modify
+ *     it under the terms of the GNU General Public License as published by
+ *     the Free Software Foundation, either version 3 of the License, or
+ *     (at your option) any later version.
+ * 
+ *     This program is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ * 
+ *     You should have received a copy of the GNU General Public License
+ *     along with this program.  If not, see <http://www.gnu.org/licenses/>
+ ******************************************************************************/
 package ch.gb;
 
 import ch.gb.apu.APU;
+import ch.gb.apu.BandpassFilter;
+import ch.gb.apu.BandpassFilter.Complex;
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
 import ch.gb.gpu.OpenglDisplay;
@@ -35,6 +53,7 @@ public class GB implements ApplicationListener {
 	private OpenglDisplay map;
 	private OpenglDisplay sprshow;
 	private OpenglDisplay waveforms;
+	private OpenglDisplay krnldisplay;
 
 	private GUI gui;
 
@@ -48,6 +67,14 @@ public class GB implements ApplicationListener {
 
 	@Override
 	public void create() {
+		/*
+		try {
+		    System.setOut(new PrintStream(new File("stdout.txt")));//not portable!
+		    System.setErr(new PrintStream(new File("errout.txt")));
+		} catch (Exception e) {
+		     e.printStackTrace();
+		}
+		*/
 		gui = new GUI(this);
 		gui.build();
 		
@@ -63,6 +90,7 @@ public class GB implements ApplicationListener {
 		map = new OpenglDisplay(256, 256, 256, 16);
 		sprshow = new OpenglDisplay(64, 80, 128, 16);
 		waveforms = new OpenglDisplay(256, 65, 256, 16);
+		krnldisplay = new OpenglDisplay(1024,768,1024,16);
 
 		comps = new GBComponents();
 
@@ -181,8 +209,9 @@ public class GB implements ApplicationListener {
 	private final int[][] bg = new int[256][256];
 	private final int[][] spr = new int[64][80];
 	private final int[][] wave = new int[256][65];
+	private final int[][] krnl = new int[1024][768];
 	private int wavecounter = 0;
-	private final int waveshift = 0;
+	//private final int waveshift = 0;
 
 	private void doDebugVram() {
 		for (int y = 0; y < 256 / 8; y++) {
@@ -250,6 +279,79 @@ public class GB implements ApplicationListener {
 
 		waveforms.refresh(wave);
 	}
+	private final BandpassFilter krnltest = new BandpassFilter(512, 0.49f,0.003f);
+	private final Complex[] signal = new BandpassFilter.Complex[512];
+	
+	private void doKernelDisplay(){
+		//FILTER KERNEL
+		int krnltlen = krnltest.getKernel().length;
+		int yoffset=500;
+		int xoffset=250;
+		for(int i=0; i<krnltlen;i++){
+			int x = i;
+			int y = (int)((krnltest.getKernel()[i])*krnltlen)  ;
+			krnl[(int)clamp(0,1023,x+xoffset)][(int)clamp(0,767,767-y-yoffset)]=0xff0000ff;
+		}
+		
+        //DFT OF FILTER KERNEL
+		if(signal[0]==null){
+			for(int i=0; i<signal.length;i++){
+				signal[i] = new BandpassFilter.Complex();
+			}
+		}
+		
+		for(int i=0;i<signal.length;i++){
+			signal[i].img=0;
+			signal[i].real = krnltest.getKernel()[i];
+		}
+
+		Complex[] result = BandpassFilter.complexfourier(signal);
+		int height = 300;
+		int width = 300;
+		int arbscale = 50;
+		
+		for(int i=0; i< result.length/2;i++){
+			float real = result[i].real;
+			float img  = result[i].img;
+			//find magnitude of each complex number
+			double mag = Math.sqrt(real*real+img*img);
+			int x = i;
+			int y = (int)((float)mag*arbscale);
+			//zero line
+			krnl[(int)clamp(0,1023,x+width)][(int)clamp(0,767,767-0-height)] = 0xffff00ff;
+			krnl[(int)clamp(0,1023,x+width)][(int)clamp(0,767,767-y-height)] = 0xff0000ff;
+		
+		}
+		
+		//IMPULSE TEST (FILTER CONVOLVED WITH UNIT IMPULSE)
+		int offx = 300;
+		int offy = 100;
+		//reset buffer
+		for(int i=0; i<krnltest.getKernel().length;i++){
+			krnltest.store(0f);
+		}
+		float stepresponse =0;
+		for(int i=0;i<krnltest.getKernel().length;i++){
+			if (i==0)krnltest.store(1f);
+			else krnltest.store(0f);
+			int x = i;
+			float rawconv = krnltest.convolveStep();
+			int y = (int)(rawconv*krnltlen);
+			//if(i==krnltlen/2)System.out.println(krnltest.getKernel()[i]);
+			stepresponse += rawconv;
+			krnl[(int)clamp(0,1023,x+offx)][(int)clamp(0,767,767-y-offy)] = 0xffff00ff;
+		}
+		//STEP RESPONSE
+		float krnlstep=0;
+		for(int i=0; i<krnltlen;i++){
+			krnlstep+=krnltest.getKernel()[i];
+		}
+		//System.out.println("Kernel sum:"+krnlstep+" vs stepresponse:"+stepresponse);
+		krnldisplay.refresh2(krnl);
+	}
+	private float clamp(float min, float max, float c){
+		return Math.min(Math.max(min, c),max);
+	}
 
 	@Override
 	public void render() {
@@ -285,10 +387,10 @@ public class GB implements ApplicationListener {
 			apu.discard();//try to prevent speaker clicking
 			apu.flush();
 		}
-		doDebugVram();
-		doDebugSpr();
-
-		map.refresh(bg);
+		//doDebugVram();
+		//doDebugSpr();
+		//doKernelDisplay();
+		//map.refresh(bg);
 
 		int sprzoom = 2;
 		int h = Gdx.graphics.getHeight();
@@ -302,6 +404,11 @@ public class GB implements ApplicationListener {
 		//map.drawStraight(batch, w - 300, h - 300, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
 		//sprshow.drawStraight(batch, w - 300, h - 500, 0, 0, 64, 80, sprzoom, sprzoom, 0, 0, 0, 64, 80);
 		//waveforms.drawStraight(batch, 50, h - 150, 0, 0, 256, 64, 1, 1, 0, 0, 0, 256, 64);
+		screen.drawStraight(batch, 0,0, 0, 0, 160, 144, Settings.zoom, Settings.zoom, 0, 0, 0, 160, 144);
+		//map.drawStraight(batch, 160*2, 80, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
+		//sprshow.drawStraight(batch, 160*2 ,0, 0, 0, 64, 80, 1, 1, 0, 0, 0, 64, 80);
+		waveforms.drawStraight(batch, 0, 0, 0, 0, 256, 64, 1, 1, 0, 0, 0, 256, 64);
+		//krnldisplay.drawStraight(batch, 0,0, 0, 0, 1024, 768, 1, 1, 0, 0, 0, 1024, 768);
 		if(showfps){
 			font.setColor(1f, 1f,0,0.5f);
 			font.draw(batch, "FPS:" + Gdx.graphics.getFramesPerSecond(), 10, h - 10);
@@ -326,7 +433,7 @@ public class GB implements ApplicationListener {
 	}
 
 	public void flushScreen() {
-		screen.refresh(gpu.videobuffer);
+		screen.refresh2(gpu.videobuffer);
 	}
 
 	public void runGameboy() {

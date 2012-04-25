@@ -1,3 +1,19 @@
+/*******************************************************************************
+ *     <A simple gameboy emulator>
+ * 
+ *     This program is free software: you can redistribute it and/or modify
+ *     it under the terms of the GNU General Public License as published by
+ *     the Free Software Foundation, either version 3 of the License, or
+ *     (at your option) any later version.
+ * 
+ *     This program is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ * 
+ *     You should have received a copy of the GNU General Public License
+ *     along with this program.  If not, see <http://www.gnu.org/licenses/>
+ ******************************************************************************/
 package ch.gb.apu;
 
 import java.util.Arrays;
@@ -14,7 +30,6 @@ import ch.gb.Component;
 import ch.gb.GBComponents;
 import ch.gb.Settings;
 import ch.gb.cpu.CPU;
-import ch.gb.utils.Audio;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.audio.AudioDevice;
@@ -80,12 +95,14 @@ public class APU implements Component {
 	private final PowerControl powercontrol;
 
 	private AudioPlaybackJava audio;
+	private final BandpassFilter bpfilter;
 
 	public APU() {
 		samplebuffer8 = new byte[bufferSize];
 		samplebuffer16 = new short[bufferSize / 2];
 
 		audio = new AudioPlaybackJava();
+		bpfilter =new BandpassFilter(512, 0.49f,0.003f);//cutoff frequency is x * samplingrate
 
 		quadrangle1 = new Square(false);
 		quadrangle2 = new Square(true);
@@ -400,36 +417,43 @@ public class APU implements Component {
 		accumwave += wave.poll() * cpucycles;
 		accumcycles += cpucycles;
 		//@formatter:off
-		resamplecounter -= cpucycles;
+		
+		
+		int le = (powercontrol.nr51 >> 4) & 0xf;// left and right enables
+		int re = powercontrol.nr51 & 0xf;
+		//le =0xf;//TODO: remove audio-on hack
+		//re = 0xf;
+		float q1 = accumsq1 / ((float) (accumcycles * 15));
+		float q2 = accumsq2 / ((float) (accumcycles * 15));// 15 is max
+		float w = accumwave /((float)(accumcycles *15));
+		//System.out.println(""+(le>>1&1)+" yoo:"+ (re>>1&1));
+		q1*=Settings.ch1enable;
+		q2*=Settings.ch2enable;
+		w*= Settings.ch3enable;
+		float chanL = ((q1 * (le & 1) + q2 * (le >> 1 & 1)+w*(le>>2&1)) / 3) * (powercontrol.leftvol + 1) / 8;
+		float chanR = ((q1 * (re & 1) + q2 * (re >> 1 & 1)+w*(re>>2&1)) / 3) * (powercontrol.rightvol + 1) / 8;
+		float mixed = (chanL + chanR) / 2 * Settings.mastervolume;//0-1
+		accumcycles = 0;
+		accumsq1 = 0;
+		accumsq2 = 0;
+		accumwave=0;
+		
+		bpfilter.store(mixed);
+		
+		resamplecounter -= cpucycles;//44100hz resample?
 		if (resamplecounter <= 0) {
 			resamplecounter += resamplerate;
-			int le = (powercontrol.nr51 >> 4) & 0xf;// left and right enables
-			int re = powercontrol.nr51 & 0xf;
-			le =0xf;//TODO: remove audio-on hack
-			re = 0xf;
-			float q1 = accumsq1 / ((float) (accumcycles * 15));
-			float q2 = accumsq2 / ((float) (accumcycles * 15));// 15 is max
-			float w = accumwave /((float)(accumcycles *15));
-			//System.out.println(""+(le>>1&1)+" yoo:"+ (re>>1&1));
-			q1*=Settings.ch1enable;
-			q2*=Settings.ch2enable;
-			w*= Settings.ch3enable;
-			float chanL = ((q1 * (le & 1) + q2 * (le >> 1 & 1)+w*(le>>2&1)) / 3) * (powercontrol.leftvol + 1) / 8;
-			float chanR = ((q1 * (re & 1) + q2 * (re >> 1 & 1)+w*(re>>2&1)) / 3) * (powercontrol.rightvol + 1) / 8;
-			float mixed = (chanL + chanR) / 2 * Settings.mastervolume;
-			accumcycles = 0;
-			accumsq1 = 0;
-			accumsq2 = 0;
-			accumwave=0;
-
-			float usample = Audio.blockDC((mixed * 65535) - 32768);
-			if (usample > 32767 - 1) {
-				usample = 32767 - 1;
-			}
-			if (usample < -32768 - 2) {
-				usample = -32768 - 2;
-			}
+			//float usample = (bpfilter.convolveStep()*60000);
+			float usample=0;
+			if(mixed!=0)
+			usample = ((mixed) * 0xffff -0x8000 );
+			else
+			usample = 0x8000;	
+			//usample = Math.max(Math.min(32768, usample),-32768);//clamp
+			//usample -=32768;
 			int sample = (int) usample;
+			//System.out.println(sample);
+			//sample += 32768;
 			// ONLY MONO supported for now
 			//samplebuffer16[sampleoffset/2]=(short)(sample&0xffff);
 			samplebuffer8[sampleoffset++] = (byte) (sample & 0xff);

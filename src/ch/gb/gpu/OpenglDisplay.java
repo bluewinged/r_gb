@@ -1,4 +1,23 @@
+/*******************************************************************************
+ *     <A simple gameboy emulator>
+ * 
+ *     This program is free software: you can redistribute it and/or modify
+ *     it under the terms of the GNU General Public License as published by
+ *     the Free Software Foundation, either version 3 of the License, or
+ *     (at your option) any later version.
+ * 
+ *     This program is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ * 
+ *     You should have received a copy of the GNU General Public License
+ *     along with this program.  If not, see <http://www.gnu.org/licenses/>
+ ******************************************************************************/
 package ch.gb.gpu;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL10;
@@ -7,7 +26,6 @@ import com.badlogic.gdx.graphics.Pixmap.Blending;
 import com.badlogic.gdx.graphics.Pixmap.Format;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.PixmapTextureData;
 import com.badlogic.gdx.utils.Disposable;
 
@@ -27,12 +45,12 @@ public class OpenglDisplay implements Disposable {
 	private final Pixmap[] renderPixmaps;
 	private final PixmapUpdate[] changedPixmaps;
 
-	private final TextureRegion[] texRegions;
-
 	private final int bwidth;
 	private final int bheight;
 	private int tile = 8;// default
-
+	private final boolean firstBind = true;
+	ByteBuffer interBuffer;
+	
 	private class PixmapUpdate {
 		boolean updateNeeded = false;
 		int x;
@@ -61,22 +79,20 @@ public class OpenglDisplay implements Disposable {
 		this.tile = fsize;
 
 		if (tpowerof2 < bwidth || tpowerof2 < bheight) {
-			throw new RuntimeException(
-					"Texture too small (smaller than buffer)");
+			throw new RuntimeException("Texture too small (smaller than buffer)");
 		}
 
 		screen = new Pixmap(tpowerof2, tpowerof2, Format.RGBA8888);
 
-		texture = new Texture(new PixmapTextureData(screen, screen.getFormat(),
-				false, true));
+		texture = new Texture(new PixmapTextureData(screen, screen.getFormat(), false, true));
 
-		//System.out.println("t_height=" + texture.getHeight());
-		//System.out.println("t_width=" + texture.getWidth());
+		// System.out.println("t_height=" + texture.getHeight());
+		// System.out.println("t_width=" + texture.getWidth());
 
 		int numPixmaps = ((bwidth / tile) * (bheight / tile));
-		//System.out.println("numpix:" + numPixmaps);
+		// System.out.println("numpix:" + numPixmaps);
 		renderPixmaps = new Pixmap[numPixmaps];
-		texRegions = new TextureRegion[numPixmaps];
+
 		changedPixmaps = new PixmapUpdate[numPixmaps];
 
 		for (int i = 0; i < renderPixmaps.length; i++) {
@@ -86,20 +102,20 @@ public class OpenglDisplay implements Disposable {
 			changedPixmaps[i] = new PixmapUpdate();
 		}
 
-		// create textureRegions
-		int colums = bwidth / tile;
-		//System.out.println("colums:" + colums);
-		int rows = bheight / tile;
-		//System.out.println("rows:" + rows);
-		int index = 0;
-		for (int y = 0; y < rows; y++) {
-			for (int x = 0; x < colums; x++) {
-				texRegions[index] = new TextureRegion(texture, x * tile,
-						bheight - y * tile - tile, tile, tile);
-				index++;
-			}
-		}
+		// disable unused features
+		Gdx.gl.glDisable(GL10.GL_ALPHA_TEST);
+		Gdx.gl.glDisable(GL10.GL_BLEND);
+		Gdx.gl.glDisable(GL10.GL_DEPTH_TEST);
+		// Gdx.gl.glDisable(GL30.GL_POLYGON_SMOOTH);
+		Gdx.gl.glDisable(GL10.GL_STENCIL_TEST);
 
+		// enable useful features
+		Gdx.gl.glEnable(GL10.GL_DITHER);
+		Gdx.gl.glEnable(GL10.GL_TEXTURE_2D);
+
+		//Allocate intermediate buffer
+		interBuffer = ByteBuffer.allocateDirect(bwidth*bheight*4);
+		interBuffer.order(ByteOrder.LITTLE_ENDIAN);
 		// disable unnecessary stuff
 		// Gdx.gl.glDisable(GL10.GL_DEPTH_TEST);
 		// Gdx.gl.glDisable(GL11.GL_SMOOTH);
@@ -113,27 +129,59 @@ public class OpenglDisplay implements Disposable {
 	}
 
 	/**
+	 * Rebinds texture to match new size
+	 */
+	public void resize() {
+
+	}
+
+	/**
+	 * just updates whole texture, for possible shader usage
+	 * receives RGBA data
+	 * @param data
+	 */
+	public void refresh2(int data[][]) {
+		//need to rebind because libgdx does probably bind textures on his own (fonts etc..)
+		Gdx.gl.glBindTexture(GL10.GL_TEXTURE_2D, texture.getTextureObjectHandle());
+
+		interBuffer.clear();
+		for (int y = 0; y < data[0].length; y++) {
+			for (int x = 0; x < data.length; x++) {
+				int tmp = data[x][y];
+				//RGBA
+				interBuffer.put((byte)(tmp>>24 & 0xff));
+				interBuffer.put((byte)(tmp>>16 & 0xff));
+				interBuffer.put((byte)(tmp>>8  & 0xff));
+				interBuffer.put((byte)(tmp>>0 & 0xff));
+			}
+		}
+		interBuffer.flip();
+		Gdx.gl.glTexSubImage2D(GL10.GL_TEXTURE_2D, 0, 0, 0, bwidth, bheight, GL10.GL_RGBA, GL10.GL_UNSIGNED_BYTE,interBuffer);
+		Gdx.gl.glFlush();
+	}
+
+	/**
 	 * feeds new screen data as linear(not) array
 	 */
-
 	public void refresh(int data[][]) {
-		Gdx.gl.glBindTexture(GL10.GL_TEXTURE_2D,
-				texture.getTextureObjectHandle());
+
+		Gdx.gl.glBindTexture(GL10.GL_TEXTURE_2D, texture.getTextureObjectHandle());
+		
 		Pixmap.setBlending(Blending.None);
+
 		// compare data in tile x tile chunks
 		int offset = 0;
 		for (int y = 0; y < data[0].length / tile; y++) {
 			for (int x = 0; x < data.length / tile; x++) {
 				// scan tiles of tile x tile
 				boolean changed = false;
-				//System.out.println(offset);
+				// System.out.println(offset);
 				for (int yy = 0; yy < tile; yy++) {
 					for (int xx = 0; xx < tile; xx++) {
 						int px = x * tile + xx;
 						int py = y * tile + yy;
 
 						if (data[px][py] != bbuffer[px][py]) {
-
 							renderPixmaps[offset].setColor(data[px][py]);
 							renderPixmaps[offset].drawPixel(xx, yy);
 							changed = true;
@@ -158,13 +206,9 @@ public class OpenglDisplay implements Disposable {
 				// System.out.println("X=" + changedPixmap8[i].x);
 				// System.out.println("Y=" + changedPixmap8[i].y);
 				// works
-				Gdx.gl.glTexSubImage2D(GL10.GL_TEXTURE_2D, 0,
-						changedPixmaps[i].x, changedPixmaps[i].y,
-						renderPixmaps[i].getWidth(),
-						renderPixmaps[i].getHeight(),
-						renderPixmaps[i].getGLFormat(),
-						renderPixmaps[i].getGLType(),
-						renderPixmaps[i].getPixels());
+				Gdx.gl.glTexSubImage2D(GL10.GL_TEXTURE_2D, 0, changedPixmaps[i].x, changedPixmaps[i].y,
+						renderPixmaps[i].getWidth(), renderPixmaps[i].getHeight(), renderPixmaps[i].getGLFormat(),
+						renderPixmaps[i].getGLType(), renderPixmaps[i].getPixels());
 				// texture.draw(renderPixmap8[0],changedPixmap8[i].x,
 				// changedPixmap8[i].y);
 			}
@@ -176,24 +220,10 @@ public class OpenglDisplay implements Disposable {
 
 	}
 
-	public void draw(SpriteBatch batch, int x, int y, int scalex, int scaley) {
-		// TODO: buggy bc always whole screen gets cleared
-		for (int i = 0; i < changedPixmaps.length; i++) {
-			if (changedPixmaps[i].updateNeeded) {
-				changedPixmaps[i].updateNeeded = false;
-				batch.draw(texRegions[i], x + changedPixmaps[i].x * scalex, y
-						+ changedPixmaps[i].y * scaley, tile * scalex, tile
-						* scaley);
-			}
-		}
-	}
-
-	public void drawStraight(SpriteBatch batch, float x, float y,
-			float originX, float originY, float width, float height,
-			float scaleX, float scaleY, float rotation, int srcX, int srcY,
-			int srcWidth, int srcHeight) {
-		batch.draw(texture, x, y, originX, originY, width, height, scaleX,
-				scaleY, rotation, srcX, srcY, srcWidth, srcHeight, false, false);
+	public void drawStraight(SpriteBatch batch, float x, float y, float originX, float originY, float width,
+			float height, float scaleX, float scaleY, float rotation, int srcX, int srcY, int srcWidth, int srcHeight) {
+		batch.draw(texture, x, y, originX, originY, width, height, scaleX, scaleY, rotation, srcX, srcY, srcWidth,
+				srcHeight, false, false);
 
 	}
 
