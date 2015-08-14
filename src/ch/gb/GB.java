@@ -67,6 +67,7 @@ public class GB implements ApplicationListener {
 
 	@Override
 	public void create() {
+            //missing data from here http://libgdx.googlecode.com/svn/tags/0.9.3/tests/gdx-tests-android/assets/data/
 		/*
 		try {
 		    System.setOut(new PrintStream(new File("stdout.txt")));//not portable!

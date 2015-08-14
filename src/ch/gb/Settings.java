@@ -46,7 +46,7 @@ public class Settings {
 	}
 	public static int numChannels=1;
 	public static int samplingrate = 44100;
-	public static float mastervolume = 0.5f;// between 0 and 1
+	public static float mastervolume = 1f;// between 0 and 1
 	public static int ch1enable = 1;// 0 disabled, 1 enabled,
 	public static int ch2enable = 1;
 	public static int ch3enable = 1;
