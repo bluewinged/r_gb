@@ -727,7 +727,7 @@ public class APU implements Component {
     /**
      * Audio playback with the java audio api
      *
-     * @author Balas
+     * @author bluew
      *
      */
     private class AudioPlaybackJava extends Thread implements AudioPlayback {
