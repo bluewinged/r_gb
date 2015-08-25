@@ -18,12 +18,18 @@ package ch.gb.apu;
 
 public interface AudioPlayback {
 
-	public void startPlayback();
+    public void start();
 
-	public void stopPlayback();
+    public void stop();
 
-	public void flush();
+    public void flush();
 
-	public void discardSamples();
+    public void close();
+    
+    public int available();
+
+    public void outputSamples(byte[] data, int off, int len);
+
+    public void discardSamples();
 
 }

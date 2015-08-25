@@ -32,8 +32,9 @@ import ch.gb.GBComponents;
 import ch.gb.Settings;
 import ch.gb.cpu.CPU;
 
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.audio.AudioDevice;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import static java.lang.Math.*;
 
 public class APU implements Component {
 
@@ -597,8 +598,8 @@ public class APU implements Component {
     private final int numChannels = 1;
     private final int bitspersample = 16;
     private float resamplerate; // 95 for 44100hz yeeeaahh
-    private int resamplecounter;
-    private final int bufferSize = 2048;
+    private double resamplecounter;
+    private final int bufferSize = 2200;
     private double[] inp = new double[4];
     private double[] oup = new double[4];
 
@@ -618,7 +619,6 @@ public class APU implements Component {
     private final PowerControl powercontrol;
 
     private AudioPlayback audio;
-
     private final BandpassFilter bpfilter;
 
     public APU() {
@@ -690,10 +690,9 @@ public class APU implements Component {
         seqstep = 0;
         seqcounter = 8192;
         audio.discardSamples();
-        audio.stopPlayback();
+        audio.stop();
         audio = new AudioPlaybackJava();
-        // audio = new AudioPlaybackOpenAL();
-        audio.startPlayback();
+        audio.start();
         samplebuffer8 = new byte[bufferSize];
 
         quadrangle1.reset();
@@ -704,6 +703,7 @@ public class APU implements Component {
         accumsq1 = 0;
         accumsq2 = 0;
         accumwave = 0;
+        accumnoise = 0;
     }
 
     public void write(int add, byte b) {
@@ -730,148 +730,85 @@ public class APU implements Component {
      * @author bluew
      *
      */
-    private class AudioPlaybackJava extends Thread implements AudioPlayback {
+    private class AudioPlaybackJava implements AudioPlayback {
 
-        final Object waitlock = new Object();
         private SourceDataLine line; // audio line
-        private final boolean isRunning;
-        private boolean requestFlush;
+        private byte[] buffer;
+        private int buffptr;
 
         AudioPlaybackJava() {
-            setDaemon(true);
-            isRunning = true;
-            start();
         }
 
         @Override
-        public void run() {
-            while (isRunning) {
-                synchronized (waitlock) {
-                    try {
-                        waitlock.wait();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-                if (line != null) {
-                    if (!requestFlush) {
-                        //System.out.println(line.available());
-                        line.write(samplebuffer8, 0, (sampleoffset));
-                    } else {
-                        requestFlush = !requestFlush;
-                        line.flush();
-                    }
-                } else {
-                    System.out.println("line is null, shutting down audio Thread");
-                    return;
-                }
-                sampleoffset = 0;
-            }
-            stopPlayback();
-        }
-
-        @Override
-        public void startPlayback() {
+        public void start() {
             if (line != null) {
+                line.start();
                 return;
             }
+            buffer = new byte[2 * 8192];
             // AudioFormat format = new AudioFormat(samplerate, bitspersample,
             // numChannels, true, false);
-            AudioFormat format = new AudioFormat(Encoding.PCM_SIGNED, samplingrate, bitspersample, numChannels, 2,
+            AudioFormat format = new AudioFormat(Encoding.PCM_SIGNED,
+                    samplingrate, bitspersample, numChannels, 2,
                     samplingrate, false);
             // downsampling: cpu freq -> 44'100hz
-            resamplerate = ((float) CPU.CLOCK / samplingrate);
-            resamplecounter = (int) resamplerate;
-            DataLine.Info info = new DataLine.Info(SourceDataLine.class, format, samplingrate);
+            resamplerate = ((float) CPU.CLOCK / samplingrate); //524288
+            resamplecounter = resamplerate;
+            DataLine.Info info = new DataLine.Info(SourceDataLine.class,
+                    format, samplingrate);
             try {
                 line = (SourceDataLine) AudioSystem.getLine(info);
-                line.open(format,8800);// 80 @ 44.1khz is 50ms
+                line.open(format, 2 * 8820);//4410 is 50ms @ 44100hz
                 //standard buffer size is 44100 bytes which is too big
-                line.start();
-            } catch (LineUnavailableException e) {
-                e.printStackTrace();
+            } catch (LineUnavailableException ex) {
+                Logger.getLogger(APU.class.getName()).log(Level.SEVERE, null, ex);
             }
+            line.start();
         }
 
         @Override
-        public void stopPlayback() {
+        public void stop() {
+
+        }
+
+        @Override
+        public void discardSamples() {
+        }
+
+        @Override
+        public void flush() {
+            int avail = line.available();
+            //if (avail > 0) {
+//            byte[] data = rb.get(avail);
+//            if (data != null) {
+//                line.write(data, 0, data.length);
+//            }
+            // }
+            if (avail >= buffptr) {
+                line.write(buffer, 0, buffptr);
+
+            }
+            buffptr = 0;
+        }
+
+        public void close() {
             if (line != null) {
                 line.flush();
                 line.drain();
                 line.close();
             }
             line = null;
-            // isRunning = false;
         }
 
-        @Override
-        public void discardSamples() {
-            requestFlush = true;
-        }
-
-        @Override
-        public void flush() {
-            synchronized (waitlock) {
-                waitlock.notify();
-            }
-        }
-    }
-
-    private class AudioPlaybackOpenAL extends Thread implements AudioPlayback {
-
-        private AudioDevice device;
-        private final boolean isRunning;
-        final Object waitlock = new Object();
-
-        public AudioPlaybackOpenAL() {
-            setDaemon(true);
-            isRunning = true;
-            start();
-        }
-
-        @Override
-        public void run() {
-            while (isRunning) {
-                synchronized (waitlock) {
-                    try {
-                        waitlock.wait();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-                //device.writeSamples(samples, offset, numSamples)
-                device.writeSamples(samplebuffer16, 0, (sampleoffset / 2));
+        public void outputSamples(byte[] data, int off, int len) {
+            for (int i = off; i < len; i++) {
+                buffer[buffptr++] = data[i];
             }
         }
 
-        @Override
-        public void startPlayback() {
-            if (device != null) {
-                return;
-            }
-            device = Gdx.audio.newAudioDevice(samplingrate, numChannels == 1);
-            //device.writeSamples(samples, offset, numSamples)
-            // device.writeSamples(samples, offset, numSamples)
+        public int available() {
+            return line.available();
         }
-
-        @Override
-        public void stopPlayback() {
-            device.dispose();
-            device = null;
-        }
-
-        @Override
-        public void flush() {
-            synchronized (waitlock) {
-                waitlock.notify();
-            }
-        }
-
-        @Override
-        public void discardSamples() {
-            // TODO Auto-generated method stub
-        }
-
     }
 
     public void flush() {
@@ -879,11 +816,15 @@ public class APU implements Component {
     }
 
     public void start() {
-        audio.startPlayback();
+        audio.start();
     }
 
     public void stop() {
-        audio.stopPlayback();
+        audio.stop();
+    }
+
+    public void close() {
+        audio.close();
     }
 
     public void discard() {
@@ -893,13 +834,14 @@ public class APU implements Component {
     private int accumsq1;
     private int accumsq2;
     private int accumwave;
+    private int accumnoise;
     private int accumcycles;
 
     public void tick(int cpucycles) {
-        for(int i =0; i< cpucycles;i++){
+        for (int i = 0; i < cpucycles; i++) {
             float sample = apucycle();
-            float filtered = filter(sample);
-            resample(filtered);
+            //float filtered = filter(sample); //drops initial fps from 60 to 40
+            resample(sample);
         }
     }
 
@@ -915,6 +857,7 @@ public class APU implements Component {
                     quadrangle1.clocklen();
                     quadrangle2.clocklen();
                     wave.clocklen();
+                    noise.clocklen();
                     break;// clock len
                 case 1:
                     break;
@@ -923,6 +866,7 @@ public class APU implements Component {
                     quadrangle2.clocklen();
                     quadrangle1.clocksweep();
                     wave.clocklen();
+                    noise.clocklen();
                     break;// clock len clock sweep
                 case 3:
                     break;
@@ -930,6 +874,7 @@ public class APU implements Component {
                     quadrangle1.clocklen();
                     quadrangle2.clocklen();
                     wave.clocklen();
+                    noise.clocklen();
                     break;// clock len
                 case 5:
                     break;
@@ -938,10 +883,12 @@ public class APU implements Component {
                     quadrangle2.clocklen();
                     quadrangle1.clocksweep();
                     wave.clocklen();
+                    noise.clocklen();
                     break;// clock len clock sweep
                 case 7:
                     quadrangle1.clockenv();
                     quadrangle2.clockenv();
+                    noise.clockenv();
                     break;// clock env
             }
 
@@ -950,10 +897,12 @@ public class APU implements Component {
             quadrangle1.clock(cpucycles);
             quadrangle2.clock(cpucycles);
             wave.clock(cpucycles);
+            noise.clock(cpucycles);
         }
         accumsq1 += quadrangle1.poll() * cpucycles;
         accumsq2 += quadrangle2.poll() * cpucycles;
         accumwave += wave.poll() * cpucycles;
+        accumnoise += noise.poll() * cpucycles;
         accumcycles += cpucycles;
         //@formatter:off
 
@@ -964,23 +913,30 @@ public class APU implements Component {
         float q1 = accumsq1 / ((float) (accumcycles * 15));
         float q2 = accumsq2 / ((float) (accumcycles * 15));// 15 is max
         float w = accumwave / ((float) (accumcycles * 15));
+        float n = accumnoise / ((float) (accumcycles * 15));
+        if (n < 0) {
+            System.out.println("weird");
+        }
         //System.out.println(""+(le>>1&1)+" yoo:"+ (re>>1&1));
         q1 *= Settings.ch1enable;
         q2 *= Settings.ch2enable;
         w *= Settings.ch3enable;
+        n *= Settings.ch4enable;
         //each channel can output between 0 and 15
-        float chanL = ((q1 * (le & 1) + q2 * (le >> 1 & 1) + w * (le >> 2 & 1)) / 3) * (powercontrol.leftvol + 1) / 8;
-        float chanR = ((q1 * (re & 1) + q2 * (re >> 1 & 1) + w * (re >> 2 & 1)) / 3) * (powercontrol.rightvol + 1) / 8;
-        float mixed = (chanL + chanR) / 2 * Settings.mastervolume;//0-1
+        float chanL = (q1 * (le & 1) + q2 * (le >> 1 & 1) + w * (le >> 2 & 1) + n * (le >> 3 & 1)) / 4 * (powercontrol.leftvol + 1) / 8;
+        float chanR = (q1 * (re & 1) + q2 * (re >> 1 & 1) + w * (re >> 2 & 1) + n * (re >> 3 & 1)) / 4 * (powercontrol.rightvol + 1) / 8;
+        float mixed = (chanL + chanR) / 2 * Settings.mastervolume;//TODO: remove master volume, its a terrible idea
 
         //System.out.println(mixed);
         accumcycles = 0;
         accumsq1 = 0;
         accumsq2 = 0;
         accumwave = 0;
+        accumnoise = 0;
         return mixed;
     }
-    public float filter(float n){
+
+    public float filter(float n) {
         //N=4, IIR butterworth filter
         //assume that the output is constant for #cpucycles
         //y[n]= 1/a0 * (b0 * x[n] + b1 * x[n-1] +... + bp * x[n-p]
@@ -992,19 +948,16 @@ public class APU implements Component {
         double b2 = 0.9543602386289991;
 
         double out = 0;
-        int cpucycles=1;
-        for (int i = 0; i < cpucycles; i++) {
-            inp[3] = inp[2];
-            inp[2] = inp[1];
-            inp[1] = inp[0];
-            inp[0] = n;
-            out = a0 * inp[0] + a1 * inp[1] + a2 * inp[2] - b1 * oup[1] - b2 * oup[2];
-            oup[3] = oup[2];
-            oup[2] = oup[1];
-            oup[1] = out;
+        inp[3] = inp[2];
+        inp[2] = inp[1];
+        inp[1] = inp[0];
+        inp[0] = n;
+        out = a0 * inp[0] + a1 * inp[1] + a2 * inp[2] - b1 * oup[1] - b2 * oup[2];
+        oup[3] = oup[2];
+        oup[2] = oup[1];
+        oup[1] = out;
 
-        }
-        return (float)out;
+        return (float) out;
         //TODO: better filtering?
         //first we can decimate withouth filtering by taking every 8th sample
         //since the highest frequency produced is (4194304/8)/2 Hz by the noise channel
@@ -1012,39 +965,124 @@ public class APU implements Component {
         // ~12th sample
         // or even better, do cubic interpolation between samples and pick not necessarily integer samples
     }
-    public void resample(float in){
-        int cpucycles=1;
-                resamplecounter -= cpucycles;//44100hz resample?
-        if (resamplecounter <= 0) {
-            resamplecounter = (int) ((float) resamplecounter + resamplerate);
-            //float usample = (bpfilter.convolveStep()*60000);
-            float signedsample = 0;
-//            if (mixed != 0) {
-//                usample = ((mixed) * 0xffff - 0x8000);
-//            } else {
-//                usample = 0x8000;
-//            }
-            signedsample = in * 0x7fff + 0xffff; //0xffff to center the unsigne pcm signal
-            //and since mixed is normalized and only positive we can max multiply by 0xffff/2
-            //usample = Math.max(Math.min(32768, usample),-32768);//clamp
-            //usample -=32768;
-            int sample = (int) signedsample;
-            //System.out.println(sample);
-            //sample += 32768;
-            // ONLY MONO supported for now
-            //samplebuffer16[sampleoffset/2]=(short)(sample&0xffff);
-            samplebuffer8[sampleoffset++] = (byte) (sample & 0xff);
-            samplebuffer8[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
-            // overflowcontrol
-            if (sampleoffset == samplebuffer8.length) {
-                //System.out.println("Audio BufferOVERFLOW");
-                Arrays.fill(samplebuffer8, (byte) 0);
-                //Arrays.fill(samplebuffer16, (short)0);
-                audio.discardSamples();// too speed up resync?//TODO: SPEED MODUS disturbs later sound output
-                sampleoffset = 0;
-            }
-            //@formatter:on
+
+    //lets do the resample step outside the APU in the GB render loop
+    //accumulate samples in here and feed them in the apu loop
+    //we feed too many samples in too short a time causing the ringbuffer to overflow
+//    double[] fifo =
+    //we use a lanczos window with a=3 for sample interpolation (instead of truncated sinc)
+    //Maybe do as blargg said and make a table for a few fractional positions and 
+    //then interpolate linearly between entries to reduce computation time
+    //http://forums.nesdev.com/viewtopic.php?f=5&t=10580&sid=59c187fb5b775f3b42154b31606b60d2&start=15
+    private double lanczos(double x) {
+        double a = 3;
+        if (x == 0) {
+            return 1;
+        } else if (0 < abs(x) && abs(x) < a) {
+            return (a * sin(PI * x) * sin(PI * x / a)) / (PI * PI * x * x);
+        } else {
+            return 0;
         }
+    }
+    long debugclk = 0;
+    long old = 0;
+    long counter;
+    long acc = 0;
+
+    int clk8 = 8;
+    double boxcar = 0;
+    double[] lanczosbuffer = new double[6];
+
+    public void resample(float in) {
+
+        clk8--;
+        if (clk8 == 0) { //picking every eight sample // we can do this because I think the highest frequency appearing is 1/16 of the max cpu frequency
+            clk8 += 8;
+            resamplecounter--;
+            boxcar += in;
+            //for a windowed sinc interpolation we need 5 (total 6) samples buffered
+            for (int k = 6; k > 1; k--) {
+                lanczosbuffer[k - 1] = lanczosbuffer[k - 2]; //the dumbfounded direct approach for prototyping
+            }
+            lanczosbuffer[0] = in;
+
+            if (resamplecounter < 0) { //fractional position is between [-1,0)
+                double frac = resamplecounter;
+                final double samplespace = (double) 524288 / 44100;
+                resamplecounter = ((double) resamplecounter + samplespace);
+                //now we do the convolution of the windowed sinc with the samples
+                //we sum from -3 to 2 and 
+                in = 0;
+                for (int i = -3; i < 3; i++) {
+                    in += lanczosbuffer[i + 3] * lanczos(frac - i);
+                }
+
+                boxcar = boxcar / samplespace;
+                float signedsample = in * 0x7fff + 0xffff; //0xffff to center the unsigne pcm signal
+                //and since mixed is normalized and only positive we can max multiply by 0xffff/2
+                int sample = (int) signedsample;
+                byte[] data = new byte[2];//TODO: change this new bullshit
+                data[0] = (byte) (sample & 0xff);
+                data[1] = (byte) ((sample >> 8) & 0xff);
+                audio.outputSamples(data, 0, 2);
+                boxcar = 0;
+
+                samplebuffer8[sampleoffset++] = (byte) (sample & 0xff);
+                samplebuffer8[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
+
+                if (sampleoffset == samplebuffer8.length) {
+                    Arrays.fill(samplebuffer8, (byte) 0);
+                    sampleoffset = 0;
+                }
+                debugclk = System.currentTimeMillis();
+                counter++;
+                acc = acc + debugclk - old;
+                old = debugclk;
+                if (acc > 1000) {
+                    acc = 0;
+                    System.out.println("events per second:" + counter);
+                    System.out.println("frac:" + frac);
+                    counter = 0;
+                }
+
+            }
+        }
+
+//                int cpucycles = 1;
+//        resamplecounter -= cpucycles;//44100hz resample?
+//        if (resamplecounter <= 0) {
+//            resamplecounter = (int) ((float) resamplecounter + resamplerate);
+//            float signedsample = in * 0x7fff + 0xffff; //0xffff to center the unsigne pcm signal
+//            //and since mixed is normalized and only positive we can max multiply by 0xffff/2
+//            int sample = (int) signedsample;
+//            //System.out.println(sample);
+//            //sample += 32768;
+//            // ONLY MONO supported for now
+//            //samplebuffer16[sampleoffset/2]=(short)(sample&0xffff);
+//            samplebuffer8[sampleoffset++] = (byte) (sample & 0xff);
+//            samplebuffer8[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
+//            debugclk = System.currentTimeMillis();
+//
+//            counter++;
+//            acc = acc + debugclk - old;
+//            old = debugclk;
+//            if (acc > 1000) {
+//                acc = 0;
+//                System.out.println("events per second:" + counter);
+//                counter = 0;
+//            }
+//
+//            byte[] data = new byte[2];
+//            data[0] = (byte) (sample & 0xff);
+//            data[1] = (byte) ((sample >> 8) & 0xff);
+//            audio.outputSamples(data, 0, 2);
+//
+//            if (sampleoffset == samplebuffer8.length) {
+//                //  audio.outputSamples(samplebuffer8, 0, samplebuffer8.length);
+//                Arrays.fill(samplebuffer8, (byte) 0);
+//                sampleoffset = 0;
+//            }
+//        }
     }
 
     public int getSampleoffset() {
@@ -1062,6 +1100,12 @@ public class APU implements Component {
         quadrangle1.powerOn();
         quadrangle2.powerOn();
         wave.powerOn();
+        noise.powerOn();
+
+        quadrangle1.setIgnoreWrite(false);
+        quadrangle2.setIgnoreWrite(false);
+        wave.setIgnoreWrite(false);
+        noise.setIgnoreWrite(false);
     }
 
     public void powerOff() {
@@ -1081,6 +1125,18 @@ public class APU implements Component {
         wave.write(NR32, i);
         wave.write(NR33, i);
         wave.write(NR34, i);
+        noise.write(NR40, i);
+        noise.write(NR41, i);
+        noise.write(NR42, i);
+        noise.write(NR43, i);
+        noise.write(NR44, i);
+        noise.write(NR44, i);
+        write(NR51, i);
+        //disallow writes to register
+        quadrangle1.setIgnoreWrite(true);
+        quadrangle2.setIgnoreWrite(true);
+        wave.setIgnoreWrite(true);
+        noise.setIgnoreWrite(true);
     }
 
     public byte channelstates() {
@@ -1088,7 +1144,8 @@ public class APU implements Component {
         int q1 = quadrangle1.status() ? 1 : 0;
         int q2 = quadrangle2.status() ? 2 : 0;
         int w = wave.status() ? 4 : 0;
-        return (byte) (w | q2 | q1);
+        int n = noise.status() ? 8 : 0;
+        return (byte) (w | q2 | q1 | n);
     }
 
     // actually not a channel, just abusing oop
@@ -1145,7 +1202,7 @@ public class APU implements Component {
                 // System.out.println("want read");
                 return (byte) (channelstates() | nr52 | 0x70);
             }
-            throw new RuntimeException("trololol not possibru");
+            throw new RuntimeException("not possible");
         }
 
         @Override
