@@ -408,7 +408,7 @@ public class GB implements ApplicationListener {
 		screen.drawStraight(batch, 0,0, 0, 0, 160, 144, Settings.zoom, Settings.zoom, 0, 0, 0, 160, 144);
 		//map.drawStraight(batch, 160*2, 80, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
 		//sprshow.drawStraight(batch, 160*2 ,0, 0, 0, 64, 80, 1, 1, 0, 0, 0, 64, 80);
-		waveforms.drawStraight(batch, 0, 0, 0, 0, 256, 64, 1, 1, 0, 0, 0, 256, 64);
+		waveforms.drawStraight(batch, 320, 0, 0, 0, 256, 64, 1, 1, 0, 0, 0, 256, 64);
 		//krnldisplay.drawStraight(batch, 0,0, 0, 0, 1024, 768, 1, 1, 0, 0, 0, 1024, 768);
 		if(showfps){
 			font.setColor(1f, 1f,0,0.5f);

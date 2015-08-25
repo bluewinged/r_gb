@@ -618,7 +618,7 @@ public class APU implements Component {
     private final PowerControl powercontrol;
 
     private AudioPlayback audio;
-    
+
     private final BandpassFilter bpfilter;
 
     public APU() {
@@ -626,7 +626,7 @@ public class APU implements Component {
         samplebuffer16 = new short[bufferSize / 2];
 
         audio = new AudioPlaybackJava();
-       // audio = new AudioPlaybackOpenAL();
+        // audio = new AudioPlaybackOpenAL();
         bpfilter = new BandpassFilter(512, 0.49f, 0.003f);//cutoff frequency is x * samplingrate
 
         quadrangle1 = new Square(false);
@@ -692,7 +692,7 @@ public class APU implements Component {
         audio.discardSamples();
         audio.stopPlayback();
         audio = new AudioPlaybackJava();
-       // audio = new AudioPlaybackOpenAL();
+        // audio = new AudioPlaybackOpenAL();
         audio.startPlayback();
         samplebuffer8 = new byte[bufferSize];
 
@@ -780,12 +780,13 @@ public class APU implements Component {
             AudioFormat format = new AudioFormat(Encoding.PCM_SIGNED, samplingrate, bitspersample, numChannels, 2,
                     samplingrate, false);
             // downsampling: cpu freq -> 44'100hz
-            resamplerate = ((float)CPU.CLOCK / samplingrate);
-            resamplecounter = (int)resamplerate;
+            resamplerate = ((float) CPU.CLOCK / samplingrate);
+            resamplecounter = (int) resamplerate;
             DataLine.Info info = new DataLine.Info(SourceDataLine.class, format, samplingrate);
             try {
                 line = (SourceDataLine) AudioSystem.getLine(info);
-                line.open(format);// TODO: use fixed size Audio buffers
+                line.open(format,8800);// 80 @ 44.1khz is 50ms
+                //standard buffer size is 44100 bytes which is too big
                 line.start();
             } catch (LineUnavailableException e) {
                 e.printStackTrace();
@@ -895,7 +896,16 @@ public class APU implements Component {
     private int accumcycles;
 
     public void tick(int cpucycles) {
+        for(int i =0; i< cpucycles;i++){
+            float sample = apucycle();
+            float filtered = filter(sample);
+            resample(filtered);
+        }
+    }
+
+    public float apucycle() {
         // frame sequencer, 512 hz (4194304/512 =8192)
+        int cpucycles = 1;
         seqcounter -= cpucycles;
         if (seqcounter <= 0) {
             seqcounter += 8192;
@@ -959,15 +969,19 @@ public class APU implements Component {
         q2 *= Settings.ch2enable;
         w *= Settings.ch3enable;
         //each channel can output between 0 and 15
-        float chanL = ((q1 * (le & 1) + q2 * (le >> 1 & 1) + w * (le >> 2 & 1)) / 3) / 15 * (powercontrol.leftvol + 1) / 8;
-        float chanR = ((q1 * (re & 1) + q2 * (re >> 1 & 1) + w * (re >> 2 & 1)) / 3) / 15 * (powercontrol.rightvol + 1) / 8;
+        float chanL = ((q1 * (le & 1) + q2 * (le >> 1 & 1) + w * (le >> 2 & 1)) / 3) * (powercontrol.leftvol + 1) / 8;
+        float chanR = ((q1 * (re & 1) + q2 * (re >> 1 & 1) + w * (re >> 2 & 1)) / 3) * (powercontrol.rightvol + 1) / 8;
         float mixed = (chanL + chanR) / 2 * Settings.mastervolume;//0-1
+
         //System.out.println(mixed);
         accumcycles = 0;
         accumsq1 = 0;
         accumsq2 = 0;
         accumwave = 0;
-
+        return mixed;
+    }
+    public float filter(float n){
+        //N=4, IIR butterworth filter
         //assume that the output is constant for #cpucycles
         //y[n]= 1/a0 * (b0 * x[n] + b1 * x[n-1] +... + bp * x[n-p]
         //-a1 * y[n-1] - a2 * y[n-2] - ... - aq * y[n-q]
@@ -978,43 +992,47 @@ public class APU implements Component {
         double b2 = 0.9543602386289991;
 
         double out = 0;
+        int cpucycles=1;
         for (int i = 0; i < cpucycles; i++) {
             inp[3] = inp[2];
             inp[2] = inp[1];
             inp[1] = inp[0];
-            inp[0] = mixed;
+            inp[0] = n;
             out = a0 * inp[0] + a1 * inp[1] + a2 * inp[2] - b1 * oup[1] - b2 * oup[2];
             oup[3] = oup[2];
             oup[2] = oup[1];
             oup[1] = out;
 
         }
-        mixed = (float) out;
+        return (float)out;
         //TODO: better filtering?
         //first we can decimate withouth filtering by taking every 8th sample
         //since the highest frequency produced is (4194304/8)/2 Hz by the noise channel
         //then we apply a iir filter with cutoff 22050 hz and finally we decimate by taking every
         // ~12th sample
         // or even better, do cubic interpolation between samples and pick not necessarily integer samples
-        resamplecounter -= cpucycles;//44100hz resample?
+    }
+    public void resample(float in){
+        int cpucycles=1;
+                resamplecounter -= cpucycles;//44100hz resample?
         if (resamplecounter <= 0) {
-            resamplecounter = (int) ((float)resamplecounter + resamplerate);
+            resamplecounter = (int) ((float) resamplecounter + resamplerate);
             //float usample = (bpfilter.convolveStep()*60000);
-           float usample = 0;
+            float signedsample = 0;
 //            if (mixed != 0) {
 //                usample = ((mixed) * 0xffff - 0x8000);
 //            } else {
 //                usample = 0x8000;
 //            }
-             usample = mixed*0x7ffff+0xffff; //0xffff to center the unsigne pcm signal
-             //and since mixed is normalized and only positive we can max multiply by 0xffff/2
+            signedsample = in * 0x7fff + 0xffff; //0xffff to center the unsigne pcm signal
+            //and since mixed is normalized and only positive we can max multiply by 0xffff/2
             //usample = Math.max(Math.min(32768, usample),-32768);//clamp
             //usample -=32768;
-            int sample = (int) usample;
+            int sample = (int) signedsample;
             //System.out.println(sample);
             //sample += 32768;
             // ONLY MONO supported for now
-            samplebuffer16[sampleoffset/2]=(short)(sample&0xffff);
+            //samplebuffer16[sampleoffset/2]=(short)(sample&0xffff);
             samplebuffer8[sampleoffset++] = (byte) (sample & 0xff);
             samplebuffer8[sampleoffset++] = (byte) ((sample >> 8) & 0xff);
             // overflowcontrol

@@ -18,7 +18,7 @@ public class LibgdxDesktopLauncher {
     public static void main(String[] args) {
         LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
         config.resizable = false;
-        config.width = 320;
+        config.width = 640;//320
         config.height = 288;
         config.fullscreen = false;
         new LwjglApplication(new GB(), config);
