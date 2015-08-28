@@ -22,8 +22,8 @@ import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
 import ch.gb.gpu.OpenglDisplay;
 import ch.gb.mem.MemoryManager;
-import ch.gb.tools.Complex;
-import ch.gb.tools.FFT;
+import ch.gb.utils.Complex;
+import ch.gb.utils.FFT;
 
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;

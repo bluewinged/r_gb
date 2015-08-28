@@ -153,7 +153,7 @@ public class MBC1 extends Mapper {
 			try {
 				os = RessourceLoader.write(Settings.root+File.separatorChar+filename);
 			} catch (FileNotFoundException e1) {
-				System.out.println("Couldnt save Ram");
+				System.err.println("Couldnt save Ram");
 				return;
 			}
 			try {

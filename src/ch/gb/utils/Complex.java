@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package ch.gb.tools;
+package ch.gb.utils;
 
 import static java.lang.Math.*;
 

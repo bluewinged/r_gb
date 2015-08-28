@@ -997,7 +997,7 @@ public class APU implements Component {
 
         clk8--;
         if (clk8 == 0) { //picking every eight sample // we can do this because I think the highest frequency appearing is 1/16 of the max cpu frequency
-            clk8 += 8;
+            clk8 += 8;   // but obviousely the square wave pulse shape creates even higher harmonics but hopefully they dont interfer too much
             resamplecounter--;
             boxcar += in;
             //for a windowed sinc interpolation we need 5 (total 6) samples buffered
