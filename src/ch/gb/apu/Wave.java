@@ -62,12 +62,12 @@ public class Wave extends Channel {
 
     @Override
     void write(int add, byte b) {
-        if (ignoreWrite) {
-            return;
-        }
         if (add == APU.NR30) {
             nr0 = b;
             dacEnabled = (b & 0x80) == 0x80;
+            if (!dacEnabled) {
+                enabled = false;
+            }
         } else if (add == APU.NR31) {
             nr1 = b;
             lc = (256 - (b & 0xff));
@@ -144,7 +144,4 @@ public class Wave extends Channel {
         return enabled;
     }
 
-    public void setIgnoreWrite(boolean val) {
-        ignoreWrite = val;
-    }
 }

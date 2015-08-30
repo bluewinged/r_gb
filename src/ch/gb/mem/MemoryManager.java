@@ -50,8 +50,8 @@ public class MemoryManager implements Component {
 	public byte[] wram1; // 4kB, switchable in GBC
 	private byte[] oam;// 0xA0 bytes OAM
 	private byte[] hram;// 0x80 bytes high ram
-	private byte interruptEnableReg;
-	private byte irqReg;
+	private byte ieReg;
+	private byte ifReg;
 
 	private int speedmode;
 
@@ -76,8 +76,8 @@ public class MemoryManager implements Component {
 
 	@Override
 	public void reset() {
-		interruptEnableReg=0;
-		irqReg=0;
+		ieReg=0;
+		ifReg=0;
 		romInfo="";
 		speedmode=0;
 		rom=null;
@@ -95,22 +95,31 @@ public class MemoryManager implements Component {
 		joy = new Joypad(this);
 		serial = new Serial();
 		sprdma = new SpriteDma(this);
-
+                
+                timer.reset();
+                joy.reset();
+                serial.reset();
+                sprdma.reset();
+                
 		GB.multiplexer.addProcessor(joy);
 
 		io = new HashMap<Integer, IOport>();
 
 		// set mapping
-		io.put(Timer.DIV, timer);
-		io.put(Timer.TAC, timer);
-		io.put(Timer.TIMA, timer);
-		io.put(Timer.TMA, timer);
+		io.put(Timer.DIVAddr, timer);
+		io.put(Timer.TACAddr, timer);
+		io.put(Timer.TIMAAddr, timer);
+		io.put(Timer.TMAAddr, timer);
 
 		io.put(Joypad.P1, joy);
 
 		io.put(Serial.SB, serial);
 		io.put(Serial.SC, serial);
 	}
+        public byte peek(int add){
+            //doesn't affect timing
+            return readByte(add);
+        }
 
 	public void writeByte(int add, byte b) {
 
@@ -147,7 +156,7 @@ public class MemoryManager implements Component {
 		} else if (add < 0xFF80) {
 			// I/O ports
 			if (add == CPU.IF_REG) {
-				irqReg = b;
+				ifReg = (byte) (0xE0 |( b & 0x1F));
 			} else if (add == KEY1) {// speed switch
 				// just surpress since no gbc support yet
 				speedmode = (b &= 1);
@@ -171,10 +180,12 @@ public class MemoryManager implements Component {
 		} else if (add < 0xFFFF) {
 			// HRAM
 			hram[add - 0xFF80] = b;
-		} else {
+		} else if (add == CPU.IE_REG) {
 			// interrupt enable register
-			interruptEnableReg = b;
-		}
+			ieReg = b;
+		} else{
+                    System.err.println("Invalid address in IO");
+                }
 		// System.out.println("Couldnt write to:"+Utils.dumpHex(add)+", out of range");
 	}
 
@@ -211,7 +222,7 @@ public class MemoryManager implements Component {
 		} else if (add < 0xFF80) {
 			// I/O ports
 			if (add == CPU.IF_REG) {
-				return irqReg;
+				return ifReg;
 			} else if (add == KEY1) {
 				// just surpress
 				return 0;
@@ -234,7 +245,7 @@ public class MemoryManager implements Component {
 			return hram[add - 0xFF80];
 		} else {
 			// interrupt enable register
-			return interruptEnableReg;
+			return ieReg;
 		}
 		// throw new RuntimeException("Couldnt decode Address:" +
 		// Utils.dumpHex(add));
@@ -261,7 +272,7 @@ public class MemoryManager implements Component {
 	public void requestInterrupt(int i) {
 		byte irq = readByte(CPU.IF_REG);
 		irq = (byte) (irq | (1 << i));
-		// System.out.println("IRQ?"+Utils.dumpHex(irq));
+		 //System.out.println("IRQ?"+Utils.dumpHex(irq));
 		writeByte(CPU.IF_REG, irq);
 	}
 

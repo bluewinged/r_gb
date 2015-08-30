@@ -36,7 +36,7 @@ public class Square extends Channel {
     private final int sweepperiodmask = 0x70;
     private final int sweepshiftmask = 0x7;
 
-    private final int lengthmask = 0x40;
+    private final int lengthenabled = 0x40;
     private int lc;
     private boolean enabled; // also channel enabled flag (?)
 
@@ -79,9 +79,9 @@ public class Square extends Channel {
     }
 
     private int reloadEnv() {
-        int period = nr2 & 7;
-        envcounter = (period != 0 ? period : 8);
-        return period;
+        int envperiod = nr2 & 7;
+        envcounter = (envperiod != 0 ? envperiod : 8);
+        return envperiod;
     }
 
     private int getFrequency() {
@@ -101,9 +101,6 @@ public class Square extends Channel {
 
     @Override
     void write(int add, byte b) {
-        if (ignoreWrite) {
-            return;
-        }
         if (add == 0xFF10 + off) {
             nr0 = b;
         } else if (add == 0xFF11 + off) {
@@ -141,7 +138,7 @@ public class Square extends Channel {
                 if (lc == 0) {
                     lc = 64;
                 }
-                divider = (divider&0x3) |(period& (~0x3));// TODO:low 2 bits are not modified
+                divider = (divider & 0x3) | (period & (~0x3));// TODO:low 2 bits are not modified
                 reloadEnv();
                 envvol = (nr2 >> 4) & 0xf;// reload volume
 
@@ -159,10 +156,9 @@ public class Square extends Channel {
 
                 }
 
-                if (!dacEnabled()) {
-                    enabled = false;
-                }
-
+            }
+            if (!dacEnabled()) {
+                enabled = false;
             }
         }
     }
@@ -170,7 +166,7 @@ public class Square extends Channel {
     @Override
     byte read(int add) {
         //System.out.println("anything?" + Utils.dumpHex(add));
-        if (add == 0xFF10 + off) {
+        if (add == 0xFF10 + off) { //square 1 has sweep
             return !hasSweep ? (byte) (nr0 | 0xff) : (byte) (nr0 | 0x80);
         } else if (add == 0xFF11 + off) {
             return (byte) (nr1 | 0x3f);
@@ -179,8 +175,8 @@ public class Square extends Channel {
         } else if (add == 0xFF13 + off) {
             return (byte) (nr3 | 0xff);
         } else if (add == 0xFF14 + off) {
-            return (byte) (nr4 | 0xBF | (enabled ? 0x40 : 0));
-        } else {
+            return (byte) (nr4 | 0xBF ); //set 0x40 to 0x0 and it passes the #2 of the registers testrom 
+        } else {    //internal enable != length enable
             throw new RuntimeException("hurrdurr");
         }
     }
@@ -195,7 +191,7 @@ public class Square extends Channel {
     }
 
     void clocklen() {
-        if ((nr4 & lengthmask) != 0 && lc != 0) {// length enabled
+        if ((nr4 & lengthenabled) != 0 && lc != 0) {// length enabled
             if (--lc <= 0) {
                 enabled = false;
             }
@@ -261,7 +257,4 @@ public class Square extends Channel {
         return enabled ? sqsample * envvol : 0;
     }
 
-    public void setIgnoreWrite(boolean val) {
-        ignoreWrite = val;
-    }
 }

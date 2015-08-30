@@ -1,0 +1,1 @@
+Place *.gb roms in this folder

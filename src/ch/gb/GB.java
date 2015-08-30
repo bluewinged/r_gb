@@ -17,7 +17,7 @@
 package ch.gb;
 
 import ch.gb.apu.APU;
-import ch.gb.apu.BandpassFilter;
+
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
 import ch.gb.gpu.OpenglDisplay;
@@ -187,8 +187,7 @@ public class GB implements ApplicationListener {
         comps.apu = apu;
         comps.link();
 
-        cpu.reset();
-        apu.reset();
+        reset();
         // cpu.DEBUG_ENABLED = true;
         paused = true;
     }
@@ -291,8 +290,6 @@ public class GB implements ApplicationListener {
         fftdisp.refresh(fftdata);
     }
 
-    private final BandpassFilter krnltest = new BandpassFilter(512, 0.49f, 0.003f);
-
 //    private void doKernelDisplay() {
 //        //FILTER KERNEL
 //        int krnltlen = krnltest.getKernel().length;
@@ -366,13 +363,12 @@ public class GB implements ApplicationListener {
     private float clamp(float min, float max, float c) {
         return Math.min(Math.max(min, c), max);
     }
-    private long last = 0;
 
     @Override
     public void render() {
         Gdx.gl.glClearColor(0.2f, 0.2f, 0.2f, 1);
         Gdx.gl.glClear(GL10.GL_COLOR_BUFFER_BIT);
-
+        int cycles = 0;
         if (!paused && hasRom) {
             hz60accu += Gdx.graphics.getDeltaTime();
             if (hz60accu >= hz60tick) {
@@ -381,7 +377,8 @@ public class GB implements ApplicationListener {
                 double rate = Gdx.input.isKeyPressed(Keys.SPACE) ? cyclesperframe * Settings.speedup : cyclesperframe;
 
                 while (cpuacc < rate) {
-                    int cycles = cpu.tick();
+
+                    cycles = cpu.tick();
                     mem.clock(cycles);
                     gpu.tick(cycles);
                     apu.tick(cycles);

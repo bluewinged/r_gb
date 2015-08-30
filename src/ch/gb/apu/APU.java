@@ -31,6 +31,7 @@ import ch.gb.Component;
 import ch.gb.GBComponents;
 import ch.gb.Settings;
 import ch.gb.cpu.CPU;
+import ch.gb.utils.Utils;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -619,7 +620,6 @@ public class APU implements Component {
     private final PowerControl powercontrol;
 
     private AudioPlayback audio;
-    private final BandpassFilter bpfilter;
 
     public APU() {
         samplebuffer8 = new byte[bufferSize];
@@ -627,7 +627,6 @@ public class APU implements Component {
 
         audio = new AudioPlaybackJava();
         // audio = new AudioPlaybackOpenAL();
-        bpfilter = new BandpassFilter(512, 0.49f, 0.003f);//cutoff frequency is x * samplingrate
 
         quadrangle1 = new Square(false);
         quadrangle2 = new Square(true);
@@ -708,20 +707,24 @@ public class APU implements Component {
 
     public void write(int add, byte b) {
         if (add >= NR10 && add <= NR51 && !powercontrol.powerstatus) {
+            //can only write to the length counter
+            //TODO
             return;
         }
         if (add >= 0xFF27 && add <= 0xFF2F) {
             return;
         }
-        // System.out.println(Utils.dumpHex(add));
+        System.out.println("WRTE: " + Utils.dumpHex(add) + "  " + Utils.dumpHex(b));
         iochannel.get(add).write(add, b);
     }
 
     public byte read(int add) {
         if (add >= 0xFF27 && add <= 0xFF2F) {
-            return 0;
+            return (byte) 0xFF;
         }
-        return iochannel.get(add).read(add);
+        byte var = iochannel.get(add).read(add);
+        System.out.println("READ: " + Utils.dumpHex(add) + "  " + Utils.dumpHex(var));
+        return var;
     }
 
     /**
@@ -1040,8 +1043,8 @@ public class APU implements Component {
                 old = debugclk;
                 if (acc > 1000) {
                     acc = 0;
-                    System.out.println("events per second:" + counter);
-                    System.out.println("frac:" + frac);
+                    // System.out.println("events per second:" + counter);
+                    // System.out.println("frac:" + frac);
                     counter = 0;
                 }
 
@@ -1101,11 +1104,6 @@ public class APU implements Component {
         quadrangle2.powerOn();
         wave.powerOn();
         noise.powerOn();
-
-        quadrangle1.setIgnoreWrite(false);
-        quadrangle2.setIgnoreWrite(false);
-        wave.setIgnoreWrite(false);
-        noise.setIgnoreWrite(false);
     }
 
     public void powerOff() {
@@ -1131,12 +1129,10 @@ public class APU implements Component {
         noise.write(NR43, i);
         noise.write(NR44, i);
         noise.write(NR44, i);
-        write(NR51, i);
+        powercontrol.write(NR50, i); //need direct writes because calls 
+        powercontrol.write(NR51, i);//to write() only are already filtered since power is off
+
         //disallow writes to register
-        quadrangle1.setIgnoreWrite(true);
-        quadrangle2.setIgnoreWrite(true);
-        wave.setIgnoreWrite(true);
-        noise.setIgnoreWrite(true);
     }
 
     public byte channelstates() {
@@ -1159,7 +1155,7 @@ public class APU implements Component {
         boolean vinRenable;
         int leftvol;
         int rightvol;
-        boolean powerstatus = false;
+        boolean powerstatus = true;
 
         private final APU apu;
 
@@ -1178,14 +1174,15 @@ public class APU implements Component {
             } else if (add == NR51) {
                 nr51 = b;
             } else if (add == NR52) {
-                nr52 = b;
-                // System.out.println("NR52:" + Utils.dumpHex(b));
+
                 boolean oldstatus = powerstatus;
                 powerstatus = (b & 0x80) == 0x80;
                 if (oldstatus != powerstatus) {
                     if (powerstatus) {
+                        System.out.println("powering on");
                         apu.powerOn();
                     } else {
+                        System.out.println("powering off");
                         apu.powerOff();
                     }
                 }
@@ -1200,7 +1197,7 @@ public class APU implements Component {
                 return (byte) (nr51 | 0x00);
             } else if (add == NR52) {
                 // System.out.println("want read");
-                return (byte) (channelstates() | nr52 | 0x70);
+                return (byte) (channelstates() | 0x70 | (powerstatus ? 0x80 : 0));
             }
             throw new RuntimeException("not possible");
         }

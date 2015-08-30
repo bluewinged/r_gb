@@ -65,9 +65,7 @@ public class Noise extends Channel {
 
     @Override
     void write(int add, byte b) {
-        if (ignoreWrite) {
-            return;
-        }
+
         if (add == APU.NR40) {
             nr0 = b;
         } else if (add == APU.NR41) {
@@ -78,6 +76,9 @@ public class Noise extends Channel {
             envvol = b >> 4 & 0xf;
             envadd = (b & 8) == 8 ? 1 : -1;
             envperiod = b & 7;
+            if (!dacEnabled()) {
+                enabled = false;
+            }
         } else if (add == APU.NR43) {
             nr3 = b;
             divisorcode = b & 7;
@@ -170,7 +171,4 @@ public class Noise extends Channel {
         return enabled ? (envvol* (~(lfsr) & 1)) : 0;
     }
 
-    public void setIgnoreWrite(boolean val) {
-        ignoreWrite = val;
-    }
 }
