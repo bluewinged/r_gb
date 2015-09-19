@@ -705,6 +705,11 @@ public class APU implements Component {
         accumnoise = 0;
     }
 
+    @Override
+    public void connect(GBComponents comps) {
+
+    }
+
     public void write(int add, byte b) {
         if (add >= NR10 && add <= NR51 && !powercontrol.powerstatus) {
             //can only write to the length counter
@@ -714,7 +719,7 @@ public class APU implements Component {
         if (add >= 0xFF27 && add <= 0xFF2F) {
             return;
         }
-        System.out.println("WRTE: " + Utils.dumpHex(add) + "  " + Utils.dumpHex(b));
+        //System.out.println("WRTE: " + Utils.dumpHex(add) + "  " + Utils.dumpHex(b));
         iochannel.get(add).write(add, b);
     }
 
@@ -723,7 +728,7 @@ public class APU implements Component {
             return (byte) 0xFF;
         }
         byte var = iochannel.get(add).read(add);
-        System.out.println("READ: " + Utils.dumpHex(add) + "  " + Utils.dumpHex(var));
+        //System.out.println("READ: " + Utils.dumpHex(add) + "  " + Utils.dumpHex(var));
         return var;
     }
 
@@ -771,7 +776,7 @@ public class APU implements Component {
 
         @Override
         public void stop() {
-
+            close();
         }
 
         @Override
@@ -840,7 +845,7 @@ public class APU implements Component {
     private int accumnoise;
     private int accumcycles;
 
-    public void tick(int cpucycles) {
+    public void clock(int cpucycles) {
         for (int i = 0; i < cpucycles; i++) {
             float sample = apucycle();
             //float filtered = filter(sample); //drops initial fps from 60 to 40
@@ -851,6 +856,13 @@ public class APU implements Component {
     public float apucycle() {
         // frame sequencer, 512 hz (4194304/512 =8192)
         int cpucycles = 1;
+        if (powercontrol.powerstatus) {
+            quadrangle1.clock(cpucycles);
+            quadrangle2.clock(cpucycles);
+            wave.clock(cpucycles);
+            noise.clock(cpucycles);
+        }
+
         seqcounter -= cpucycles;
         if (seqcounter <= 0) {
             seqcounter += 8192;
@@ -896,12 +908,7 @@ public class APU implements Component {
             }
 
         }
-        if (powercontrol.powerstatus) {
-            quadrangle1.clock(cpucycles);
-            quadrangle2.clock(cpucycles);
-            wave.clock(cpucycles);
-            noise.clock(cpucycles);
-        }
+
         accumsq1 += quadrangle1.poll() * cpucycles;
         accumsq2 += quadrangle2.poll() * cpucycles;
         accumwave += wave.poll() * cpucycles;
@@ -1092,11 +1099,6 @@ public class APU implements Component {
         return sampleoffset;
     }
 
-    @Override
-    public void link(GBComponents comps) {
-
-    }
-
     public void powerOn() {
         seqstep = 0;
         seqcounter = 8192;
@@ -1179,10 +1181,10 @@ public class APU implements Component {
                 powerstatus = (b & 0x80) == 0x80;
                 if (oldstatus != powerstatus) {
                     if (powerstatus) {
-                        System.out.println("powering on");
+                        //System.out.println("powering on");
                         apu.powerOn();
                     } else {
-                        System.out.println("powering off");
+                        //System.out.println("powering off");
                         apu.powerOff();
                     }
                 }

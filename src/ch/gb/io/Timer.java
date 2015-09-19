@@ -16,11 +16,13 @@
  ******************************************************************************/
 package ch.gb.io;
 
+import ch.gb.Component;
+import ch.gb.GBComponents;
 import ch.gb.cpu.CPU;
-import ch.gb.mem.MemoryManager;
+import ch.gb.mem.Memory;
 import ch.gb.utils.Utils;
 
-public class Timer implements IOport {
+public class Timer implements IOport, Component {
 
     public static final int DIVAddr = 0xff04;
     public static final int TIMAAddr = 0xff05;
@@ -41,10 +43,10 @@ public class Timer implements IOport {
     private int timercounter = period4096hz;
     private int timerperiod;
 
-    private final MemoryManager mem;
+    private Memory mem;
 
-    public Timer(MemoryManager mem) {
-        this.mem = mem;
+    public Timer() {
+
     }
 
     @Override
@@ -55,6 +57,11 @@ public class Timer implements IOport {
         tac = 0;
         divcounter = period16384hz;
         timercounter = period4096hz;
+
+    }
+
+    public void connect(GBComponents comps) {
+        mem = comps.mem;
     }
 
     public void clock(int ticks) {

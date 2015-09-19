@@ -16,39 +16,73 @@
  ******************************************************************************/
 package ch.gb.io;
 
-import ch.gb.mem.MemoryManager;
+import ch.gb.Component;
+import ch.gb.GBComponents;
+import ch.gb.mem.Memory;
+import ch.gb.utils.Utils;
 
-public class SpriteDma implements IOport {
-	private final MemoryManager mem;
-	public static final int OAM_DMA = 0xFF46;
+public class SpriteDma implements IOport, Component {
 
-	public SpriteDma(MemoryManager mem) {
-		this.mem = mem;
-	}
-	@Override
-	public void reset() {
-		// TODO Auto-generated method stub
-		
-	}
+    private Memory mem;
+    public static final int OAM_DMA = 0xFF46;
+    private int count;
+    private int dmaSrc;
+    private int dmaDest;
+    private int accum;
 
-	@Override
-	public void write(int add, byte b) {
-		// for testing assume instant DMA transfer
-		//b =(byte)(b%0xF1);
-		int address = (b & 0xff) << 8; // source address is data * 100
-		for (int i = 0; i < 0xA0; i++) {
-			mem.writeByte(0xFE00 + i, mem.readByte(address + i));
-		}
-	}
+    public SpriteDma() {
 
-	@Override
-	public byte read(int add) {
-		return 0;
-	}
+    }
 
-	public void tick() {
-		// Later used for timed DMA transfer
-	}
+    @Override
+    public void reset() {
+        // TODO Auto-generated method stub
 
+    }
+
+    public void connect(GBComponents comps) {
+        this.mem = comps.mem;
+    }
+
+    @Override
+    public void write(int add, byte b) {
+        count = 161 * 4;
+        count -= 4;
+        //  for testing assume instant DMA transfer
+//        int address = (b & 0xff) << 8; // source address is data * 100
+//        for (int i = 0; i < 0xA0; i++) {
+//            mem.writeByte(0xFE00 + i, mem.readByte(address + i));
+//        }
+        dmaSrc = (b & 0xff) << 8;
+        dmaDest = 0xFE00;
+        accum =0;
+        //System.out.println("DMA START");
+    }
+
+    @Override
+    public byte read(int add) {
+        return 0;
+    }
+
+    public void clock(int cycles) {
+
+        if (count > 0) {
+            accum += cycles;
+            while (accum >= 4 && count >0) {
+
+                mem.writeByte(dmaDest, mem.readByte(dmaSrc));
+                //System.out.println("from:" + Utils.dumpHex(dmaSrc) + "  to:" + Utils.dumpHex(dmaDest));
+                accum -= 4;
+                count -= 4;
+                dmaDest++;
+                dmaSrc++;
+            }
+            if (count == 0) {
+                accum = 0;
+                //System.out.println("DMA END");
+                //System.out.println();
+            }
+        }
+    }
 
 }

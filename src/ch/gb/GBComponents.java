@@ -19,17 +19,31 @@ package ch.gb;
 import ch.gb.apu.APU;
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
-import ch.gb.mem.MemoryManager;
+import ch.gb.io.Joypad;
+import ch.gb.io.Serial;
+import ch.gb.io.SpriteDma;
+import ch.gb.io.Timer;
+import ch.gb.mem.Memory;
 
 public class GBComponents {
-	public CPU cpu;
-	public MemoryManager mem;
-	public GPU gpu;
-	public APU apu;
-	public void link(){
-		cpu.link(this);
-		mem.link(this);
-		gpu.link(this);
-		apu.link(this);
-	}
+
+    public CPU cpu;
+    public Memory mem;
+    public GPU gpu;
+    public APU apu;
+    public Timer timer;
+    public Joypad joypad;
+    public Serial serial;
+    public SpriteDma spriteDma;
+
+    public void connect() {
+        cpu.connect(this);
+        mem.connect(this);
+        gpu.connect(this);
+        apu.connect(this);
+        timer.connect(this);
+        joypad.connect(this);
+        serial.connect(this);
+        spriteDma.connect(this);
+    }
 }

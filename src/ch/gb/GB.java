@@ -21,7 +21,11 @@ import ch.gb.apu.APU;
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
 import ch.gb.gpu.OpenglDisplay;
-import ch.gb.mem.MemoryManager;
+import ch.gb.io.Joypad;
+import ch.gb.io.Serial;
+import ch.gb.io.SpriteDma;
+import ch.gb.io.Timer;
+import ch.gb.mem.Memory;
 import ch.gb.utils.Complex;
 import ch.gb.utils.FFT;
 
@@ -40,7 +44,11 @@ public class GB implements ApplicationListener {
     private CPU cpu;
     private GPU gpu;
     private APU apu;
-    private MemoryManager mem;
+    private Memory mem;
+    private Timer timer;
+    private Joypad joypad;
+    private Serial serial;
+    private SpriteDma spriteDma;
 
     private final float framerate = 60f;// 60hz
     private float hz60accu;
@@ -62,13 +70,52 @@ public class GB implements ApplicationListener {
     private GUI gui;
 
     public static InputMultiplexer multiplexer = new InputMultiplexer();
-    ;
 
-	private float fontalpha = 1.0f;
+    private float fontalpha = 1.0f;
     private boolean paused;
     private boolean hasRom = false;
     private boolean showfps = true;
     private boolean romInfo = true;
+
+    public void reset() {
+        mem.reset();
+        apu.reset();
+        gpu.reset();
+        cpu.reset();
+
+        mem.writeByte(0xFF05, (byte) 0x00);// TIMA
+        mem.writeByte(0xFF06, (byte) 0x00);// TMA
+        mem.writeByte(0xFF07, (byte) 0x00);// TAC
+        mem.writeByte(0xFF10, (byte) 0x80);// NR10
+        mem.writeByte(0xFF11, (byte) 0xBF);// NR11
+        mem.writeByte(0xFF12, (byte) 0xF3);// NR12
+        mem.writeByte(0xFF14, (byte) 0xBF);// NR14
+        mem.writeByte(0xFF16, (byte) 0x3F);// NR21
+        mem.writeByte(0xFF17, (byte) 0x00);// NR22
+        mem.writeByte(0xFF19, (byte) 0xBF);// NR24
+        mem.writeByte(0xFF1A, (byte) 0x7F);// NR30
+        mem.writeByte(0xFF1B, (byte) 0xFF);// NR31
+        mem.writeByte(0xFF1C, (byte) 0x9F);// NR32
+        mem.writeByte(0xFF1E, (byte) 0xBF);// NR33
+        mem.writeByte(0xFF20, (byte) 0xFF);// NR41
+        mem.writeByte(0xFF21, (byte) 0x00);// NR42
+        mem.writeByte(0xFF22, (byte) 0x00);// NR43
+        mem.writeByte(0xFF23, (byte) 0xBF);// NR30
+        mem.writeByte(0xFF24, (byte) 0x77);// NR50
+        mem.writeByte(0xFF25, (byte) 0xF3);// NR51
+        mem.writeByte(0xFF26, (byte) 0xF1);// GB, $F0-SGB ; NR52
+        mem.writeByte(0xFF40, (byte) 0x91);// LCDC
+        mem.writeByte(0xFF42, (byte) 0x00);// SCY
+        mem.writeByte(0xFF43, (byte) 0x00);// SCX
+        mem.writeByte(0xFF45, (byte) 0x00);// LYC
+        mem.writeByte(0xFF47, (byte) 0xFC);// BGP
+        mem.writeByte(0xFF48, (byte) 0xFF);// OBP0
+        mem.writeByte(0xFF49, (byte) 0xFF);// OBP1
+        mem.writeByte(0xFF4A, (byte) 0x00);// WY
+        mem.writeByte(0xFF4B, (byte) 0x00);// WX
+        mem.writeByte(0xFFFF, (byte) 0x00);// IE
+
+    }
 
     @Override
     public void create() {
@@ -98,13 +145,6 @@ public class GB implements ApplicationListener {
         waveform = new OpenglDisplay(256, 65, 256, 16);
         fftdisp = new OpenglDisplay(256, 65, 256, 16);
         krnldisplay = new OpenglDisplay(1024, 768, 1024, 16);
-
-        comps = new GBComponents();
-
-        cpu = new CPU();
-        gpu = new GPU(this);
-        apu = new APU();
-        mem = new MemoryManager();
 
         // @formatter:off
         // GAMES
@@ -181,11 +221,25 @@ public class GB implements ApplicationListener {
         // mem.loadRom("Testroms/demos/Filltest Demo (PD).gb"); //Works
         // mem.loadRom("Testroms/demos/Paint Demo (PD).gb");
         // mem.loadRom("Testroms/demos/Big Scroller Demo (PD).gb");//works
+        comps = new GBComponents();
+
+        cpu = new CPU();
+        gpu = new GPU(this);
+        apu = new APU();
+        mem = new Memory();
+        timer = new Timer();
+        joypad = new Joypad();
+        serial = new Serial();
+        spriteDma = new SpriteDma();
         comps.cpu = cpu;
         comps.mem = mem;
         comps.gpu = gpu;
         comps.apu = apu;
-        comps.link();
+        comps.timer = timer;
+        comps.joypad = joypad;
+        comps.serial = serial;
+        comps.spriteDma = spriteDma;
+        comps.connect();
 
         reset();
         // cpu.DEBUG_ENABLED = true;
@@ -380,8 +434,10 @@ public class GB implements ApplicationListener {
 
                     cycles = cpu.tick();
                     mem.clock(cycles);
-                    gpu.tick(cycles);
-                    apu.tick(cycles);
+                    gpu.clock(cycles);
+                    apu.clock(cycles);
+                    timer.clock(cycles);
+                    spriteDma.clock(cycles);
                     cpuacc += cycles;
                 }
 
@@ -473,13 +529,6 @@ public class GB implements ApplicationListener {
         apu.close();
         // write savegames
         mem.saveRam();
-    }
-
-    public void reset() {
-        mem.reset();
-        apu.reset();
-        gpu.reset();
-        cpu.reset();
     }
 
     public void loadRom(String path) {

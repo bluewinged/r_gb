@@ -25,13 +25,13 @@ package ch.gb.mem;
 public abstract class Mapper {
 	public static final int ROM_0x0000 = 0;
 	public static final int ROM_0x4000 = 1;
-	protected MemoryManager mem;
+	protected Memory mem;
 	protected Rom rom;
 
 	public Mapper() {
 	}
 
-	public static Mapper createMBC(MemoryManager mem, Rom rom) {
+	public static Mapper createMBC(Memory mem, Rom rom) {
 		assert mem != null && rom != null;
 		Mapper mbc = null;
 		switch (rom.getType()) {
@@ -75,7 +75,7 @@ public abstract class Mapper {
 	public abstract void loadRam();
 	public abstract void saveRam();
 
-	public void setMem(MemoryManager mem) {
+	public void setMem(Memory mem) {
 		this.mem = mem;
 	}
 

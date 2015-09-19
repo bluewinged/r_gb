@@ -19,7 +19,7 @@ package ch.gb.cpu;
 import ch.gb.Component;
 import ch.gb.GBComponents;
 import ch.gb.io.Timer;
-import ch.gb.mem.MemoryManager;
+import ch.gb.mem.Memory;
 import ch.gb.utils.Utils;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -92,9 +92,9 @@ public class CPU implements Component {
     //private int delayIE;
     private boolean ime;// interrupt master enabled flag
     private boolean halt;
-    private MemoryManager mem;
+    private Memory mem;
 
-    public static boolean DEBUG_ENABLED =false;
+    public static boolean DEBUG_ENABLED = false;
     private int debugpc;
     private String debuginf;
 
@@ -128,13 +128,32 @@ public class CPU implements Component {
 
     private int consumedCycles;
 
+    private BufferedWriter bw = null;
+    boolean debugfail = false;
+
     public CPU() {
         generateInstructions();
     }
-    private BufferedWriter bw = null;
-    boolean debugfail=false;
+
+    @Override
+    public void reset() {
+        halt = false;
+        ime = true;
+        pc = 0x100;
+        sp = 0xFFFE;
+        wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
+        wr16reg(RG_BC, 0x0013);
+        wr16reg(RG_DE, 0x00D8);
+        wr16reg(RG_HL, 0x014D);
+    }
+
+    @Override
+    public void connect(GBComponents comps) {
+        this.mem = comps.mem;
+    }
+
     public int tick() {
-           debugpc = pc;
+        debugpc = pc;
         debuginf = "idling";
         if (DEBUG_ENABLED) {
 //            for(int i=0;i<256;i++){
@@ -143,20 +162,19 @@ public class CPU implements Component {
 //                    System.out.println(nCyclesTaken[i]-nCycles[i]);
 //                }
 //            }
-            //this is the jump to the failure message
-            if(pc==0xC2EF && (((rd16reg(RG_AF) >> 4 )&0x8)!=0x8)){
-                debugfail=true;
-                System.out.println("ERROR");
-            }
-        }
+//            //this is the jump to the failure message
+//            if(pc==0xC2EF && (((rd16reg(RG_AF) >> 4 )&0x8)!=0x8)){
+//                debugfail=true;
+//                System.out.println("ERROR");
+//            }
 
-        checkInterrupts();
+        }
         consumedCycles = 0;
+        checkInterrupts();
+
         if (halt) {
             return 4;
         }
-
-     
 
         byte opcode = mem.readByte(pc++);
         byte b2 = mem.readByte(pc);
@@ -171,19 +189,19 @@ public class CPU implements Component {
                     + "   if:" + Utils.dumpHex(mem.peek(CPU.IF_REG))
                     + "   znhc:" + String.format("%4s", Integer.toBinaryString((rd16reg(RG_AF) >> 4) & 0xf)).replace(' ', '0')
                     + "   tima:" + Utils.dumpHex(mem.peek(Timer.TIMAAddr) & 0xff);
-            if(debugfail){
-                debuginf=debuginf+ "   :FAILURE";
-                debugfail=false;
+            if (debugfail) {
+                debuginf = debuginf + "   :FAILURE";
+                debugfail = false;
             }
         }
 
         if ((opcode & 0xff) == 0xCB) {
             int np = mem.readByte(pc++) & 0xff;
-            consumedCycles += eCycles[np] * 4;// machine -> clock cycles
             eInstr[np].compile();
+            consumedCycles += eCycles[np] * 4;// machine -> clock cycles
         } else {
-            consumedCycles += nCycles[opcode & 0xff] * 4;// machine -> clock cycles
             nInstr[opcode & 0xff].compile();
+            consumedCycles += nCycles[opcode & 0xff] * 4;// machine -> clock cycles
         }
 
         if (DEBUG_ENABLED) {
@@ -215,7 +233,7 @@ public class CPU implements Component {
             byte irq = mem.readByte(IF_REG);
             byte ie = mem.readByte(IE_REG);
 
-            if (irq != 0) {
+            if ((irq & 0x1f) != 0) {
                 if (halt) {
                     halt = false; //interrupt occured, we leave halt mode
                 }
@@ -227,7 +245,7 @@ public class CPU implements Component {
                     irq &= 0xFE;
                     mem.writeByte(IF_REG, irq);
                     pc = VEC_VBLANK;
-                    // consumedCycles+=22;
+                    consumedCycles += 20; //can't put this out of here because ie has to be checked too
                     return;
                 } else if ((irq & 2) == 2 && (ie & 2) == 2) {
                     // LCD
@@ -236,6 +254,7 @@ public class CPU implements Component {
                     irq &= 0xFD;
                     mem.writeByte(IF_REG, irq);
                     pc = VEC_LCD;
+                    consumedCycles += 20;
                     return;
                 } else if ((irq & 4) == 4 && (ie & 4) == 4) {
                     // Timer
@@ -244,6 +263,7 @@ public class CPU implements Component {
                     irq &= 0xFB;
                     mem.writeByte(IF_REG, irq);
                     pc = VEC_TIMER;
+                    consumedCycles += 20;
                     return;
                 } else if ((irq & 8) == 8 && (ie & 8) == 8) {
                     // Serial
@@ -252,6 +272,7 @@ public class CPU implements Component {
                     irq &= 0xF7;
                     mem.writeByte(IF_REG, irq);
                     pc = VEC_SERIAL;
+                    consumedCycles += 20;
                     return;
                 } else if ((irq & 0x10) == 0x10 && (ie & 0x10) == 0x10) {
                     // Joypad
@@ -260,6 +281,7 @@ public class CPU implements Component {
                     irq &= 0xEF;
                     mem.writeByte(IF_REG, irq);
                     pc = VEC_JOY;
+                    consumedCycles += 20;
                     return;
                 }
             }
@@ -1183,7 +1205,7 @@ public class CPU implements Component {
                     pc += 2;
                     if ((regs[RG_F] & flag) == condition) {
                         pc = n;
-                        if (flag != JMP_ALWAYS && condition != JMP_ALWAYS) {
+                        if (flag != JMP_ALWAYS) {
                             consumedCycles += 4;
                         }
                     }
@@ -1207,7 +1229,7 @@ public class CPU implements Component {
                     byte n = mem.readByte(pc++);
                     if ((regs[RG_F] & flag) == condition) {
                         pc += n;
-                        if (flag != JMP_ALWAYS && condition != JMP_ALWAYS) {
+                        if (flag != JMP_ALWAYS) {
                             consumedCycles += 4;
                         }
                     }
@@ -1226,7 +1248,7 @@ public class CPU implements Component {
                     if ((regs[RG_F] & flag) == condition) {
                         push2(pc);
                         pc = n;
-                        if (flag != JMP_ALWAYS && condition != JMP_ALWAYS) {
+                        if (flag != JMP_ALWAYS) {
                             consumedCycles += 12;
                         }
                     }
@@ -1254,7 +1276,7 @@ public class CPU implements Component {
                 void compile() {
                     if ((regs[RG_F] & flag) == condition) {
                         pc = pop2();
-                        if (flag != JMP_ALWAYS && condition != JMP_ALWAYS) {
+                        if (flag != JMP_ALWAYS) {
                             consumedCycles += 12;
                         }
                     }
@@ -1340,58 +1362,6 @@ public class CPU implements Component {
 
         static int byImm = 9;
         static int byHL = 8;
-    }
-
-    @Override
-    public void link(GBComponents comps) {
-        this.mem = comps.mem;
-    }
-
-    /**
-     * Perform this reset last
-     */
-    @Override
-    public void reset() {
-        halt = false;
-        ime = true;
-        pc = 0x100;
-        wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
-        wr16reg(RG_BC, 0x0013);
-        wr16reg(RG_DE, 0x00D8);
-        wr16reg(RG_HL, 0x014D);
-
-        sp = 0xFFFE;
-        mem.writeByte(0xFF05, (byte) 0x00);// TIMA
-        mem.writeByte(0xFF06, (byte) 0x00);// TMA
-        mem.writeByte(0xFF07, (byte) 0x00);// TAC
-        mem.writeByte(0xFF10, (byte) 0x80);// NR10
-        mem.writeByte(0xFF11, (byte) 0xBF);// NR11
-        mem.writeByte(0xFF12, (byte) 0xF3);// NR12
-        mem.writeByte(0xFF14, (byte) 0xBF);// NR14
-        mem.writeByte(0xFF16, (byte) 0x3F);// NR21
-        mem.writeByte(0xFF17, (byte) 0x00);// NR22
-        mem.writeByte(0xFF19, (byte) 0xBF);// NR24
-        mem.writeByte(0xFF1A, (byte) 0x7F);// NR30
-        mem.writeByte(0xFF1B, (byte) 0xFF);// NR31
-        mem.writeByte(0xFF1C, (byte) 0x9F);// NR32
-        mem.writeByte(0xFF1E, (byte) 0xBF);// NR33
-        mem.writeByte(0xFF20, (byte) 0xFF);// NR41
-        mem.writeByte(0xFF21, (byte) 0x00);// NR42
-        mem.writeByte(0xFF22, (byte) 0x00);// NR43
-        mem.writeByte(0xFF23, (byte) 0xBF);// NR30
-        mem.writeByte(0xFF24, (byte) 0x77);// NR50
-        mem.writeByte(0xFF25, (byte) 0xF3);// NR51
-        mem.writeByte(0xFF26, (byte) 0xF1);// GB, $F0-SGB ; NR52
-        mem.writeByte(0xFF40, (byte) 0x91);// LCDC
-        mem.writeByte(0xFF42, (byte) 0x00);// SCY
-        mem.writeByte(0xFF43, (byte) 0x00);// SCX
-        mem.writeByte(0xFF45, (byte) 0x00);// LYC
-        mem.writeByte(0xFF47, (byte) 0xFC);// BGP
-        mem.writeByte(0xFF48, (byte) 0xFF);// OBP0
-        mem.writeByte(0xFF49, (byte) 0xFF);// OBP1
-        mem.writeByte(0xFF4A, (byte) 0x00);// WY
-        mem.writeByte(0xFF4B, (byte) 0x00);// WX
-        mem.writeByte(0xFFFF, (byte) 0x00);// IE
     }
 
     private void generateInstructions() {
