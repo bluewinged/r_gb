@@ -48,7 +48,9 @@ public abstract class Mapper {
 			mbc = new MBC1(true, true);
 			break;
 		}
-
+                if(mbc==null){
+                    throw new RuntimeException("This particular MBC is not supported");
+                }
 		mbc.setMem(mem);
 		mbc.setRom(rom);
 		mbc.init();// load initial banks

@@ -25,7 +25,6 @@ public class Noise extends Channel {
     private int envadd;
     private int envperiod;
     private int envcounter = 0;
-    private boolean envtriggered = true;
 
     private final int lengthmask = 0x40;
     private int lc;
@@ -39,24 +38,28 @@ public class Noise extends Channel {
 
     private final int[] noiseperiod = {8, 16, 32, 48, 64, 80, 96, 112};
 
-    public Noise() {
+    private APU apu;
 
+    public Noise(APU apu) {
+        this.apu = apu;
     }
 
     @Override
     void reset() {
-
+        enabled = false;
+        envcounter=0;
+        envvol=0;
+        lc =64;
     }
-    //TODO: tetris uses one of the timers to time the noise channel
-    //and it seems to be a factor of 2 slower
+
     public void powerOn() {
 
     }
 
     private int reloadEnv() {
-        int period = nr2 & 7;
-        envcounter = (period != 0 ? period : 8);
-        return period;
+        int tmp = nr2 & 7;
+        envcounter = (tmp != 0 ? tmp : 8);
+        return tmp;
     }
 
     private boolean dacEnabled() {
@@ -89,13 +92,20 @@ public class Noise extends Channel {
             if ((b & triggermask) == triggermask) {// trigger
                 nr4 &= 0x7F;// clear trigger flag
 
-                envtriggered = true;
                 enabled = true;
                 if (lc == 0) {
                     lc = 64;
+                    if (!clockLenNext(apu.seqstep())) {
+                        lc--; //only 63
+                    }
                 }
+
                 divider = noiseperiod[divisorcode];// TODO:low 2 bits are not modified
                 reloadEnv();
+                if (apu.seqstep() == 7) {
+                    envcounter++;
+                }
+
                 envvol = (nr2 >> 4) & 0xf;// reload volume
 
                 lfsr = 0x7fff; //set all 15 bits to one
@@ -126,7 +136,7 @@ public class Noise extends Channel {
     void clock(int cycles) {
         divider -= cycles;
         while (divider <= 0) {
-            divider += ((noiseperiod[divisorcode])<<clockshift);
+            divider += ((noiseperiod[divisorcode]) << clockshift);
             int top = (lfsr & 1) ^ ((lfsr >> 1) & 1); //xor bit 0 and bit 1
             lfsr = lfsr >>> 1;
             lfsr = lfsr | (top << 14);
@@ -145,20 +155,10 @@ public class Noise extends Channel {
     }
 
     void clockenv() {
-        if (--envcounter <= 0) {
-            envcounter = envperiod == 0 ? 8 : envperiod;// period 0 is treated
-            // as 8
-            if (envperiod != 0 && envtriggered) {
-                envvol += envadd;
-            }
-            if (envvol == 16 || envvol == -1) {
-                envtriggered = false;
-            }
-            if (envvol == 16) {
-                envvol = 15;
-            }
-            if (envvol == -1) {
-                envvol = 0;
+        if (--envcounter <= 0 && reloadEnv() != 0) {
+            int v = envvol + envadd;
+            if (0 <= v && v <= 15) {
+                envvol = v;
             }
         }
     }
@@ -167,8 +167,8 @@ public class Noise extends Channel {
         return enabled;
     }
 
-    public int poll() { 
-        return enabled ? (envvol* (~(lfsr) & 1)) : 0;
+    public int poll() {
+        return enabled ? (envvol * (~(lfsr) & 1)) : 0;
     }
 
 }

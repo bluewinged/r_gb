@@ -435,7 +435,7 @@ public class GB implements ApplicationListener {
                     cycles = cpu.tick();
                     mem.clock(cycles);
                     gpu.clock(cycles);
-                    apu.clock(cycles);
+                    if(!Gdx.input.isKeyPressed(Keys.SPACE)) apu.clock(cycles);
                     timer.clock(cycles);
                     spriteDma.clock(cycles);
                     cpuacc += cycles;

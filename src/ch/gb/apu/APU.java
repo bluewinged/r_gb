@@ -628,10 +628,10 @@ public class APU implements Component {
         audio = new AudioPlaybackJava();
         // audio = new AudioPlaybackOpenAL();
 
-        quadrangle1 = new Square(false);
-        quadrangle2 = new Square(true);
-        noise = new Noise();
-        wave = new Wave();
+        quadrangle1 = new Square(this, false);
+        quadrangle2 = new Square(this, true);
+        noise = new Noise(this);
+        wave = new Wave(this);
         powercontrol = new PowerControl(this);
 
         iochannel = new HashMap<Integer, Channel>();
@@ -866,7 +866,6 @@ public class APU implements Component {
         seqcounter -= cpucycles;
         if (seqcounter <= 0) {
             seqcounter += 8192;
-            seqstep = (seqstep + 1) & 7;
             switch (seqstep) {
                 case 0:
                     quadrangle1.clocklen();
@@ -906,6 +905,7 @@ public class APU implements Component {
                     noise.clockenv();
                     break;// clock env
             }
+            seqstep = (seqstep + 1) & 7;
 
         }
 
@@ -944,6 +944,10 @@ public class APU implements Component {
         accumwave = 0;
         accumnoise = 0;
         return mixed;
+    }
+
+    public int seqstep() {
+        return seqstep;
     }
 
     public float filter(float n) {

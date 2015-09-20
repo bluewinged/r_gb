@@ -45,8 +45,10 @@ public class Square extends Channel {
 
     private final int off;
     private final boolean hasSweep;
+    private APU apu;
 
-    Square(boolean is2nd) {
+    Square(APU apu, boolean is2nd) {
+        this.apu = apu;
         off = is2nd ? 5 : 0;
         hasSweep = !is2nd;
     }
@@ -64,7 +66,7 @@ public class Square extends Channel {
         sweepenabled = false;
         sweepfreq = 0;
         sweepneg = 0;
-        lc = 0;
+        lc = 64;
         enabled = false;
         sequencer = 0;
         sqsample = 0;
@@ -79,9 +81,9 @@ public class Square extends Channel {
     }
 
     private int reloadEnv() {
-        int envperiod = nr2 & 7;
-        envcounter = (envperiod != 0 ? envperiod : 8);
-        return envperiod;
+        int tmp = nr2 & 7;
+        envcounter = (tmp!= 0 ? tmp : 8);
+        return tmp;
     }
 
     private int getFrequency() {
@@ -133,13 +135,23 @@ public class Square extends Channel {
             if ((b & triggermask) == triggermask) {// trigger
                 nr4 &= 0x7F;// clear trigger flag
 
-                envtriggered = true;
                 enabled = true;
                 if (lc == 0) {
                     lc = 64;
+                    //if next step doesn't clock length
+                    if(!clockLenNext(apu.seqstep())){
+                        lc--; //only 63
+                    }
                 }
+                
+
                 divider = (divider & 0x3) | (period & (~0x3));// TODO:low 2 bits are not modified
                 reloadEnv();
+                
+                if(apu.seqstep()==7){
+                    envcounter++;
+                }
+                
                 envvol = (nr2 >> 4) & 0xf;// reload volume
 
                 if (hasSweep) {// only first sq channel
@@ -199,21 +211,11 @@ public class Square extends Channel {
     }
 
     void clockenv() {
-        if (--envcounter <= 0) {
-            envcounter = envperiod == 0 ? 8 : envperiod;// period 0 is treated
-            // as 8
-            if (envperiod != 0 && envtriggered) {
-                envvol += envadd;
-            }
-            if (envvol == 16 || envvol == -1) {
-                envtriggered = false;
-            }
-            if (envvol == 16) {
-                envvol = 15;
-            }
-            if (envvol == -1) {
-                envvol = 0;
-            }
+        if (--envcounter <= 0 && reloadEnv() !=0) {
+            int v = envvol + envadd;
+            if(0<=v && v <=15){
+                envvol = v;
+            }     
         }
     }
 

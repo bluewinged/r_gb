@@ -43,9 +43,9 @@ public class GPU implements Component {
 
     private byte lcdc;
     private boolean lcdEnabled;
-    private int windowTilemap;
-    private boolean windowEnable;
-    private int bgWiTiledata;
+    private int winTilemap;
+    private boolean winEnable;
+    private int bgWinTiledata;
     private int bgTilemap;
     private boolean spr8x16;
     private boolean sprEnable;
@@ -69,7 +69,7 @@ public class GPU implements Component {
     private byte obp1raw;
     private final byte[] bgp = {0, 0, 0, 0};
     private final byte[][] obp = {{0, 0, 0, 0}, {0, 0, 0, 0}};
-	// FORMAT: RGBA 10er hex
+    // FORMAT: RGBA 10er hex
     // dark green: 015;056;015 -> 0xF , 0x38, 0xF
     // green : 048;098;048 -> 0x30, 0x62, 0x30
     // bright grn: 139;172;015 -> 0x8B, 0xAC, 0xF
@@ -77,10 +77,10 @@ public class GPU implements Component {
     // brighter, bright, green, darkgreen
     // private final int[] palette = { 0x9BBC0FFF, 0x8BAC0FFF,
     // 0x306230FF,0x0F380FFF };//wiki
-    // private final int[] palette = { 0xE0f8d0ff, 0x88C070ff, 0x346856,
-    // 0x081820ff };//BGP
-    private final int[] palette = {0xE8E8E8FF, 0xA0A0A0FF, 0x585858FF, 0x101010FF};// b/w
-    private int scanlinecyc = 456;
+    private final int[] palette = { 0xE0f8d0ff, 0x88C070ff, 0x346856,
+     0x081820ff };//BGP
+    ///private final int[] palette = {0xE8E8E8FF, 0xA0A0A0FF, 0x585858FF, 0x101010FF};// b/w
+    private int lcdClock = 456;
 
     private final GB emu;
     private Memory mem;
@@ -129,19 +129,17 @@ public class GPU implements Component {
         if (add == LCD_C) {
             lcdc = b;
             lcdEnabled = (b & 0x80) == 0x80;
-            windowTilemap = (b & 0x40) == 0x40 ? 0x9C00 : 0x9800;// nametable
-            windowEnable = (b & 0x20) == 0x20;
+            winTilemap = (b & 0x40) == 0x40 ? 0x9C00 : 0x9800;// nametable
+            winEnable = (b & 0x20) == 0x20;
 
-            bgWiTiledata = (b & 0x10) == 0x10 ? 0x8000 : 0x9000;// patterns
+            bgWinTiledata = (b & 0x10) == 0x10 ? 0x8000 : 0x9000;// patterns (0 is unsigned addressing)
 
             bgTilemap = (b & 8) == 8 ? 0x9C000 : 0x9800;// nametable
             spr8x16 = (b & 4) == 4;
             sprEnable = (b & 2) == 2;
-            bgEnable = (b & 1) == 1;
+            bgEnable = (b & 1) == 1; //background becomes white
         } else if (add == STAT) {
-            b &= 0x78; // clear lower 3 bits and 7
-            stat &= 87;// clear 6-3
-            stat |= b;
+            stat = (byte) (b & 0x78); // clear lower 3 bits and 7 ( those are read only)
 
         } else if (add == SCX) {
             scx = b & 0xff;
@@ -154,7 +152,7 @@ public class GPU implements Component {
         } else if (add == WY) {
             wy = b & 0xff;
         } else if (add == WX) {
-            wx = (b & 0xff) - 7;
+            wx = (b & 0xff);
         } else if (add == BGP) {
             bgpraw = b;
             bgp[0] = (byte) (b & 3);
@@ -163,13 +161,13 @@ public class GPU implements Component {
             bgp[3] = (byte) (b >> 6 & 3);
         } else if (add == OBP0) {
             obp0raw = b;
-            obp[0][0] = (byte) (b & 3);
+            obp[0][0] = (byte) (b & 3); //not used because transparent
             obp[0][1] = (byte) (b >> 2 & 3);
             obp[0][2] = (byte) (b >> 4 & 3);
             obp[0][3] = (byte) (b >> 6 & 3);
         } else if (add == OBP1) {
             obp1raw = b;
-            obp[1][0] = (byte) (b & 3);
+            obp[1][0] = (byte) (b & 3); //not used because transparent
             obp[1][1] = (byte) (b >> 2 & 3);
             obp[1][2] = (byte) (b >> 4 & 3);
             obp[1][3] = (byte) (b >> 6 & 3);
@@ -208,108 +206,111 @@ public class GPU implements Component {
     /**
      * 160x144 pixels to draw
      *
-     * @param cpucycles
+     * @param cycles
      */
-    public void clock(int cpucycles) {
+    public void clock(int cycles) {
 
         if (!lcdEnabled) {
-            scanlinecyc = 456;
+            lcdClock = 456;
             ly = 0;
             mode = 1;
         } else {
-            int oldMode = mode;
-			// mode 0: 204 cycles
+            // mode 0: 204 cycles
             // mode 1:4560 cycles
             // mode 2: 80 cycles
             // mode 3: 172 cycles
+            //complete screen refresh 70224 = 144 * 456 + 4560
 
             if (ly >= 144) {
-                mode = 1;
-            } else if (scanlinecyc >= 456 - 80) { // counting downwards!
-                mode = 2;
-            } else if (scanlinecyc >= 456 - 80 - 172) {
-                mode = 3;
-            } else {
-                mode = 0;
-            }
-			// request interrupt if entered a new mode and if interrupt flag is
-            // set
-            // (mode 3 has no interrupt)
-            if (mode != 3 && oldMode != mode && (((stat >> (3 + mode)) & 1) == 1)) {
-                mem.requestInterrupt(CPU.LCD_IR);
-            }
+                if (mode != 1) {
+                    mode = 1;//VBLANK 
+                    if ((stat & 0x10) == 0x10) {
+                        mem.requestInterrupt(CPU.LCD_IR);
+                    }
+                    mem.requestInterrupt(CPU.VBLANK_IR);
+                    emu.flushScreen();// flush data into video driver
+                }
+            } else if (lcdClock >= 456 - 80) { // counting downwards!
+                if (mode != 2) {
+                    mode = 2; //Searching OAM
 
-            // coincidence flag
-            coincidence = 0;
-            if (ly == lyc && (stat & 0x40) == 0x40) {
-                mem.requestInterrupt(CPU.LCD_IR);// TODO: this gets spammed
-                coincidence = 1;
+                    if ((stat & 0x20) == 0x20) {
+                        mem.requestInterrupt(CPU.LCD_IR); //TODO: check
+                    }
+                }
+            } else if (lcdClock >= 456 - 80 - 172) {
+                mode = 3; //data transfer to LCD
+            } else {
+                if (mode != 0) { //HBLANK
+                    mode = 0;
+
+                    if ((stat & 0x8) == 0x8) {
+                        mem.requestInterrupt(CPU.LCD_IR);
+                    }
+
+                    if (bgEnable) { //background
+                        drawBgScanline();
+                    }
+                    if (winEnable) { //TODO: window
+                        drawWinScanline();
+                    }
+
+                    if (sprEnable) { //sprites
+                        drawSprScanline();
+                    }
+                }
             }
         }
         if (!lcdEnabled) {
             return;
         }
 
-        scanlinecyc -= cpucycles;
-        if (scanlinecyc <= 0) {
-            scanlinecyc = 456 + scanlinecyc; // adjust if taken too many
+        lcdClock -= cycles;
+        if (lcdClock <= 0) {
+            lcdClock = 456 + lcdClock; // adjust if taken too many
             ly++;
 
+            // coincidence flag
+            coincidence = 0;
+            if (ly == lyc && (stat & 0x40) == 0x40) {
+                mem.requestInterrupt(CPU.LCD_IR);
+                coincidence = 1;
+            }
+
             // VBlank?
-            if (ly == 144) {
-                mem.requestInterrupt(CPU.VBLANK_IR);
-                emu.flushScreen();// flush data into video driver
+            if (ly == 144) { //TODO: this gets spammed?
+
             }
             if (ly > 153) {
                 ly = 0;
             }
-
-            // draw renderscanline
-            if (ly < 144) {
-                if (bgEnable) {
-                    drawBg();
-                }
-                if (sprEnable) {
-                    drawSpr();
-                }
-            }
         }
     }
 
-    public void drawBg() { // bg and window scanline
+    public void drawBgScanline() { // bg and window scanline
         int y = ly + scy;// which scanline in the tilemap
         y = y % 256;// wrap around bg map
 
-        int bgInTiley = y % 8 * 2;
-        int wiInTiley = ((ly - wy) % 8) * 2;
+        int bgInTileY = y % 8 * 2;
 
-        boolean signed = bgWiTiledata == 0x9000;
+        boolean signed = bgWinTiledata == 0x9000;
         int bgEntry = bgTilemap + y / 8 * 32;// 32 tiles per nametablerow
-        int wiEntry = windowTilemap + (ly - wy) / 8 * 32;
-        // first check wether this can be a window scanline
-        boolean canWindow = windowEnable && wy <= ly;
+
         int targetTilemap = bgEntry;
-        int targetTiley = bgInTiley;
-        for (int x = 0; x < 160; x++) {
+        int targetTileY = bgInTileY;
+
+        for (int x = 0; x < 160; x++) {//
 
             int tx = (x + scx) & 0xff;
 
-            if (x >= wx && canWindow) {
-                // once switched not possible anymore to switch back to bgEntry
-                targetTilemap = wiEntry;
-                tx = x - wx;// to window space
-                targetTiley = wiInTiley;
-
-            }
-
             // fetch namtable byte
-            byte tileid = mem.readByte(targetTilemap + tx / 8);
+            byte tileId = mem.readByte(targetTilemap + tx / 8);
 
-            int tileloc = bgWiTiledata + (signed ? (int) tileid : tileid & 0xff) * 16;
+            int tileloc = bgWinTiledata + (signed ? (int) tileId : tileId & 0xff) * 16;
 
             // fetch tile pattern
-            byte lo = mem.readByte(tileloc + targetTiley);
-            byte hi = mem.readByte(tileloc + targetTiley + 1);
+            byte lo = mem.readByte(tileloc + targetTileY);
+            byte hi = mem.readByte(tileloc + targetTileY + 1);
 
             int intilex = tx % 8;
 
@@ -319,7 +320,39 @@ public class GPU implements Component {
 
     }
 
-    public void drawSpr() {
+    public void drawWinScanline() {
+        int winInTileY = ((ly - wy) % 8) * 2;
+
+        int winEntry = winTilemap + (ly - wy) / 8 * 32;
+        // first check wether this can be a window scanline
+        if ((ly < wy) || wx >= 160) {
+            return;
+        }
+        boolean signed = bgWinTiledata == 0x9000;
+        int targetTilemap = winEntry;
+        int targetTileY = winInTileY;
+
+        for (int x = 0; x < 160; x++) {//
+
+            int tx = (x + wx - 7) & 0xff;
+
+            // fetch namtable byte
+            byte tileId = mem.readByte(targetTilemap + tx / 8);
+
+            int tileloc = bgWinTiledata + (signed ? (int) tileId : tileId & 0xff) * 16;
+
+            // fetch tile pattern
+            byte lo = mem.readByte(tileloc + targetTileY);
+            byte hi = mem.readByte(tileloc + targetTileY + 1);
+
+            int intilex = tx % 8;
+
+            int color = palette[bgp[(lo >> (7 - intilex) & 1) | ((hi >> (7 - intilex) & 1) << 1)]];
+            videobuffer[x][ly] = color;
+        }
+    }
+
+    public void drawSprScanline() {
 
         for (int i = 0; i < 40; i++) {
             int ypos = (mem.readByte(0xFE00 + i * 4) & 0xff) - 16;
@@ -399,7 +432,7 @@ public class GPU implements Component {
     public int[] get8bg(int line, byte tile, int table) {
         line = line % 8;
         // int target = table == 0 ? 0x8000 : 0x9000;
-        int target = bgWiTiledata;
+        int target = bgWinTiledata;
         boolean signed = target == 0x9000;
         int realtile = (signed ? (int) tile : tile & 0xff);
         int patternentry = target + realtile * 16 + line * 2;

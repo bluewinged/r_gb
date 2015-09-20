@@ -29,11 +29,16 @@ public class Wave extends Channel {
     private int samplebuffer;
     private int position;
     private final byte[] wavetable;
+    private final byte[] buffer; //for reading back last value written
 
     private static int[] shift = {4, 0, 1, 2};
 
-    public Wave() {
+    private APU apu;
+
+    public Wave(APU apu) {
+        this.apu = apu;
         wavetable = new byte[0x10];
+        buffer = new byte[0x10];
         //TODO: init vals 
     }
 
@@ -42,9 +47,26 @@ public class Wave extends Channel {
         enabled = false;
         dacEnabled = false;
         volumecode = 0;
-        lc = 0;
+        lc = 256;
         samplebuffer = 0;
         position = 0;
+        wavetable[0] = (byte) 0x84;
+        wavetable[1] = (byte) 0x40;
+        wavetable[2] = (byte) 0x43;
+        wavetable[3] = (byte) 0xAA;
+        wavetable[4] = (byte) 0x2D;
+        wavetable[5] = (byte) 0x78;
+        wavetable[6] = (byte) 0x92;
+        wavetable[7] = (byte) 0x3C;
+        wavetable[8] = (byte) 0x60;
+        wavetable[9] = (byte) 0x59;
+        wavetable[10] = (byte) 0x59;
+        wavetable[11] = (byte) 0xB0;
+        wavetable[12] = (byte) 0x34;
+        wavetable[13] = (byte) 0xB8;
+        wavetable[14] = (byte) 0x2E;
+        wavetable[15] = (byte) 0xDA;
+
     }
 
     public void powerOn() {
@@ -53,7 +75,7 @@ public class Wave extends Channel {
     }
 
     private int getFrequency() {
-        return (((nr4 & 7) << 8) | (nr3 & 0xff));
+        return (((nr4 & 7) <<8) | (nr3 & 0xff));
     }
 
     private int getPeriod() {
@@ -84,7 +106,11 @@ public class Wave extends Channel {
                 enabled = true;
                 if (lc == 0) {
                     lc = 256;
+                    if (!clockLenNext(apu.seqstep()) && ((b & lengthmask) == lengthmask)) {
+                        lc--; //only 255
+                    }
                 }
+
                 divider = getPeriod();
                 volumecode = nr2 >> 5 & 3;
                 position = 0;
@@ -93,7 +119,9 @@ public class Wave extends Channel {
                 }
             }
         } else if (add >= 0xff30 && add <= 0xff3f) {
-            wavetable[add - 0xff30] = b;
+            int addr = access(add);
+            wavetable[addr - 0xff30] = b;
+            buffer[addr - 0xff30] = b;
         }
 
     }
@@ -112,7 +140,8 @@ public class Wave extends Channel {
         } else if (add == APU.NR34) {
             return (byte) (nr4 | 0xBF);
         } else if (add >= 0xff30 && add <= 0xff3f) {
-            return wavetable[add - 0xff30];
+            int addr = access(add);
+            return buffer[addr - 0xff30];
         }
         throw new RuntimeException("never happens");
     }
@@ -122,7 +151,9 @@ public class Wave extends Channel {
         while (divider <= 0) {
             divider += getPeriod();
             position = (position + 1) & 0x1f;//32 step
-            samplebuffer = (wavetable[position / 2] >> ((position % 2) * 4)) & 0xf;
+            if (enabled) {
+                samplebuffer = (wavetable[position / 2] >> ((position % 2) * 4)) & 0xf;
+            }
             //System.out.println(position+"->"+samplebuffer);
         }
     }
@@ -133,6 +164,14 @@ public class Wave extends Channel {
                 enabled = false;
             }
         }
+    }
+
+    //quirky behavior of waveram access
+    private int access(int add) {
+        if (enabled) {
+            add = 0xFF30 + (position >> 1);
+        }
+        return add;
     }
 
     public int poll() {

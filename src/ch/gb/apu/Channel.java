@@ -25,11 +25,15 @@ public abstract class Channel {
     protected byte nr4;
     protected int divider = 1;
     protected int triggermask = 0x80;
-    protected boolean ignoreWrite = false;
 
     abstract void write(int add, byte b);
 
     abstract byte read(int add);
 
     abstract void reset();
+    
+    protected boolean clockLenNext(int seqstep){
+        //TODO: improve by testing for uneven
+        return (seqstep==0) || (seqstep==2) || (seqstep==4) || (seqstep==6);
+    }
 }
