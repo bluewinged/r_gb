@@ -22,9 +22,7 @@ import ch.gb.Settings;
 import ch.gb.cpu.CPU;
 import ch.gb.mem.Memory;
 
-import com.badlogic.gdx.InputProcessor;
-
-public class Joypad implements IOport, InputProcessor, Component {
+public class Joypad implements IOport, IJoypad, Component {
 
     public final static int P1 = 0xff00;
 
@@ -34,7 +32,7 @@ public class Joypad implements IOport, InputProcessor, Component {
     private Memory mem;
 
     public Joypad() {
-        
+
     }
 
     @Override
@@ -49,7 +47,7 @@ public class Joypad implements IOport, InputProcessor, Component {
 
     @Override
     public void write(int add, byte b) {
-		//System.out.println("happens");
+        //System.out.println("happens");
         // select buttons or direction pad
         selection &= 0xCF;
         selection |= (b & 0x30);
@@ -59,13 +57,13 @@ public class Joypad implements IOport, InputProcessor, Component {
     public byte read(int add) {
         //System.out.println("hthattooappens");
         if ((selection & 0x20) == 0) {
-			// select buttons
+            // select buttons
             // System.out.println(Integer.toBinaryString(selection &
             // (0x30|((joy8 >> 4) & 0xf))));
             return (byte) (selection & (0x30 | ((joy8 >> 4) & 0xf)));
 
         } else if ((selection & 0x10) == 0) {
-			// select direction pad
+            // select direction pad
             // System.out.println("faggy");
             return (byte) (selection & (0x30 | (joy8 & 0xf)));
         }
@@ -76,7 +74,6 @@ public class Joypad implements IOport, InputProcessor, Component {
 
     }
 
-	// --------Libgdx Input processing ---------------------------
     // 0 = pressed
     // 1 = not pressed
     @Override
@@ -105,43 +102,6 @@ public class Joypad implements IOport, InputProcessor, Component {
 
             // System.out.println(Utils.dumpHex(joy8));
         }
-        return false;
-    }
-
-    // ------ not relevant------------------------
-    @Override
-    public boolean keyTyped(char character) {
-
-        return false;
-    }
-
-    @Override
-    public boolean touchDown(int x, int y, int pointer, int button) {
-
-        return false;
-    }
-
-    @Override
-    public boolean touchUp(int x, int y, int pointer, int button) {
-
-        return true;
-    }
-
-    @Override
-    public boolean touchDragged(int x, int y, int pointer) {
-
-        return false;
-    }
-
-    @Override
-    public boolean touchMoved(int x, int y) {
-
-        return false;
-    }
-
-    @Override
-    public boolean scrolled(int amount) {
-
         return false;
     }
 

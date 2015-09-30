@@ -17,47 +17,65 @@
 package ch.gb.mem;
 
 public class RomOnly extends Mapper {
-	public RomOnly() {
-	}
 
-	@Override
-	public void init() {
-		switch16kRom(ROM_0x0000, rom.get16kRomBank(0));
-		switch16kRom(ROM_0x4000, rom.get16kRomBank(1));
-	}
+    public RomOnly() {
+        super();
+    }
 
-	@Override
-	public void write(int add, byte b) {
-		// nothing happens
-	}
+    @Override
+    public void init() {
+        switch16kRom(ROM_0x0000, rom.get16kRomBank(0));
+        switch16kRom(ROM_0x4000, rom.get16kRomBank(1));
+    }
 
-	@Override
-	public int getNumRamBanks() {
-		return 0;
-		
-	}
+    @Override
+    public void write(int add, byte b) {
+        // nothing happens
+    }
 
-	@Override
-	public byte[][] getRam() {
+    @Override
+    public byte read(int add) {
+        if (add < 0x4000) {
+            // 16kB Rom bank #0
+            return rombanks[0][add];
+        } else if (add < 0x8000) {
+            // 16kB Rom switchable
+            return rombanks[1][add - 0x4000];
+        } else if ( 0xA000<= add && add <0xC000){
+            // 8kB exram (optionally wired)
+            return exram[add - 0xA000];
+        } else {
+            throw new RuntimeException("Memory access violation in RomOnly");
+        }
+    }
 
-		return null;
-	}
+    @Override
+    public int getNumRamBanks() {
+        return 0;
 
-	@Override
-	public boolean hasSramOrBattery() {
-		return false;
-	}
+    }
 
-	@Override
-	public void loadRam() {
-		// TODO Auto-generated method stub
-		
-	}
+    @Override
+    public byte[][] getRam() {
 
-	@Override
-	public void saveRam() {
-		// TODO Auto-generated method stub
-		
-	}
+        return null;
+    }
+
+    @Override
+    public boolean hasSramOrBattery() {
+        return false;
+    }
+
+    @Override
+    public void loadRam() {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void saveRam() {
+        // TODO Auto-generated method stub
+
+    }
 
 }

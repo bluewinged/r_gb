@@ -23,7 +23,7 @@ import java.io.InputStream;
 import ch.gb.utils.RessourceLoader;
 import ch.gb.utils.Utils;
 
-public class Rom {
+public class Cartridge {
 	private final byte[] header;
 	private boolean headerchunk=true;
 	private byte[][] rom;
@@ -48,7 +48,7 @@ public class Rom {
 	private String cartridgeAsString;
 	private final String nl;
 
-	public Rom(String path) {
+	public Cartridge(String path) {
 		this.path = path;
 		header = new byte[0x50 + 0x100];
 		nl = System.getProperty("line.separator");

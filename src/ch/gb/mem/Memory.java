@@ -48,9 +48,8 @@ public class Memory implements Component {
     public static final int SC = 0xFF02;
     public static final int KEY1 = 0xFF4D;
 
-    public byte[][] rombanks; // 2 x 16kB
+
     public byte[] vram; // 1 x 8kB , switchable in GBC
-    public byte[] exram;// 8kB external Ram
     private byte[] wram0; // 4kB
     public byte[] wram1; // 4kB, switchable in GBC
     private byte[] oam;// 0xA0 bytes OAM
@@ -73,12 +72,12 @@ public class Memory implements Component {
     private SpriteDma sprdma;
     private HashMap<Integer, IOport> io;
 
-    private Rom rom;
+    private Cartridge rom;
 
     public Memory() {
-        rombanks = new byte[2][0x4000];
+       
         vram = new byte[0x2000];
-        exram = new byte[0x2000];
+
         wram0 = new byte[0x2000];
         wram1 = new byte[0x2000];
         oam = new byte[0xA0];
@@ -94,10 +93,8 @@ public class Memory implements Component {
         speedmode = 0;
         rom = null;
         mbc = null;
-        Arrays.fill(rombanks[0], (byte) 0);
-        Arrays.fill(rombanks[1], (byte) 0);
+
         Arrays.fill(vram, (byte) 0);
-        Arrays.fill(exram, (byte) 0);
         Arrays.fill(wram0, (byte) 0);
         Arrays.fill(wram1, (byte) 0);
         Arrays.fill(oam, (byte) 0);
@@ -132,8 +129,6 @@ public class Memory implements Component {
 
         io.put(Serial.SB, serial);
         io.put(Serial.SC, serial);
-        GB.multiplexer.addProcessor(joy);
-        
     }
 
     public byte peek(int add) {
@@ -151,11 +146,11 @@ public class Memory implements Component {
             mbc.write(add, b);
         } else if (add < 0xA000) {
             // 8kB Video Ram
-            // System.out.println("finally:"+Utils.dumpHex(b));
             vram[add - 0x8000] = b;
         } else if (add < 0xC000) {
             // 8kB exram
-            exram[(add - 0xA000) % exram.length] = b;
+            mbc.write(add, b);
+            //exram[(add - 0xA000) % exram.length] = b;
         } else if (add < 0xD000) {
             // 4kB WRAM 0
             wram0[add - 0xC000] = b;
@@ -204,7 +199,7 @@ public class Memory implements Component {
             // interrupt enable register
             ieReg = b;
         } else {
-            System.err.println("Invalid address in IO");
+            System.err.println("Memory access violation in IO");
         }
         // System.out.println("Couldnt write to:"+Utils.dumpHex(add)+", out of range");
     }
@@ -213,16 +208,19 @@ public class Memory implements Component {
         add &= 0xFFFF;
         if (add < 0x4000) {
             // 16kB Rom bank #0
-            return rombanks[0][add];
+             //return rombanks[0][add];
+            return mbc.read(add);  
         } else if (add < 0x8000) {
             // 16kB Rom switchable
-            return rombanks[1][add - 0x4000];
+            //return rombanks[1][add - 0x4000];
+            return mbc.read(add);
         } else if (add < 0xA000) {
             // 8kB Video Ram
             return vram[add - 0x8000];
         } else if (add < 0xC000) {
             // 8kB EXRAM
-            return exram[(add - 0xA000) % exram.length];
+            //return exram[(add - 0xA000) % exram.length];
+            return mbc.read(add);
         } else if (add < 0xD000) {
             // 4kB WRAM 0
             return wram0[add - 0xC000];
@@ -295,9 +293,10 @@ public class Memory implements Component {
     }
 
     public void loadRom(String path) {
-        rom = new Rom(path);
+        rom = new Cartridge(path);
         //System.out.println(rom.getInformation());
         romInfo = rom.getInformation();
+        System.out.println(romInfo);
         mbc = Mapper.createMBC(this, rom);
     }
 

@@ -152,7 +152,7 @@ public class CPU implements Component {
         this.mem = comps.mem;
     }
 
-    public int tick() {
+    public int clock() {
         debugpc = pc;
         debuginf = "idling";
         if (DEBUG_ENABLED) {

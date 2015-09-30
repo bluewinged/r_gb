@@ -1,0 +1,6 @@
+Wario land:
+start screen, going down the pipe: wario is partially visible through the pipe
+
+super mario land 2:
+pipes in the first level: mario is shortly visible through the health/status bar probably because the mario sprite has priority over the window color 0. (seems to be intended according
+	to bgb)

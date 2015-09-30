@@ -20,7 +20,6 @@ import ch.gb.apu.APU;
 
 import ch.gb.cpu.CPU;
 import ch.gb.gpu.GPU;
-import ch.gb.gpu.OpenglDisplay;
 import ch.gb.io.Joypad;
 import ch.gb.io.Serial;
 import ch.gb.io.SpriteDma;
@@ -28,19 +27,11 @@ import ch.gb.io.Timer;
 import ch.gb.mem.Memory;
 import ch.gb.utils.Complex;
 import ch.gb.utils.FFT;
-
-import com.badlogic.gdx.ApplicationListener;
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input.Keys;
-import com.badlogic.gdx.InputMultiplexer;
-import com.badlogic.gdx.graphics.GL10;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import static java.lang.Math.*;
 
-public class GB implements ApplicationListener {
+public final class GB {
 
-    private GBComponents comps;
+    public GBComponents comps;
     private CPU cpu;
     private GPU gpu;
     private APU apu;
@@ -50,32 +41,24 @@ public class GB implements ApplicationListener {
     private Serial serial;
     private SpriteDma spriteDma;
 
+    private int[][] lcd;
+
     private final float framerate = 60f;// 60hz
     private float hz60accu;
     private final float hz60tick = 1f / framerate;
     private double cpuacc;
     private final double cyclesperframe = (CPU.CLOCK / framerate);
     private int clock;
-    // graphics
-    private SpriteBatch batch;
-    private BitmapFont font;
-    private BitmapFont fadeoutFont;
-    private OpenglDisplay screen;
-    private OpenglDisplay map;
-    private OpenglDisplay sprshow;
-    private OpenglDisplay waveform;
-    private OpenglDisplay fftdisp;
-    private OpenglDisplay krnldisplay;
-
-    private GUI gui;
-
-    public static InputMultiplexer multiplexer = new InputMultiplexer();
 
     private float fontalpha = 1.0f;
     private boolean paused;
     private boolean hasRom = false;
     private boolean showfps = true;
     private boolean romInfo = true;
+
+    public GB() {
+        create();
+    }
 
     public void reset() {
         mem.reset();
@@ -117,7 +100,6 @@ public class GB implements ApplicationListener {
 
     }
 
-    @Override
     public void create() {
         //missing data from here http://libgdx.googlecode.com/svn/tags/0.9.3/tests/gdx-tests-android/assets/data/
 		/*
@@ -128,24 +110,13 @@ public class GB implements ApplicationListener {
          e.printStackTrace();
          }
          */
-        gui = new GUI(this);
-        gui.build();
 
-        Gdx.input.setInputProcessor(multiplexer);
-
-        multiplexer.addProcessor(gui.getInputProcessor1());
-        multiplexer.addProcessor(gui.getInputProcessor2());
-
-        batch = new SpriteBatch();
-        font = new BitmapFont();
-        fadeoutFont = new BitmapFont();
-        screen = new OpenglDisplay(160, 144, 256, 16);
-        map = new OpenglDisplay(256, 256, 256, 16);
-        sprshow = new OpenglDisplay(64, 80, 128, 16);
-        waveform = new OpenglDisplay(256, 65, 256, 16);
-        fftdisp = new OpenglDisplay(256, 65, 256, 16);
-        krnldisplay = new OpenglDisplay(1024, 768, 1024, 16);
-
+//        screen = new OpenglDisplay(160, 144, 256, 16);
+//        map = new OpenglDisplay(256, 256, 256, 16);
+//        sprshow = new OpenglDisplay(64, 80, 128, 16);
+//        waveform = new OpenglDisplay(256, 65, 256, 16);
+//        fftdisp = new OpenglDisplay(256, 65, 256, 16);
+//        krnldisplay = new OpenglDisplay(1024, 768, 1024, 16);
         // @formatter:off
         // GAMES
         //mem.loadRom("Roms/Tetris.gb");//bg bugged, sound bugged, wave doesnt silence
@@ -241,15 +212,10 @@ public class GB implements ApplicationListener {
         comps.spriteDma = spriteDma;
         comps.connect();
 
+        lcd = new int[160][144];
         reset();
         // cpu.DEBUG_ENABLED = true;
         paused = true;
-    }
-
-    @Override
-    public void resize(int width, int height) {
-        // TODO Auto-generated method stub
-
     }
 
     private final int[][] bg = new int[256][256];
@@ -272,7 +238,7 @@ public class GB implements ApplicationListener {
                 }
             }
         }
-        map.refresh(bg);
+        // map.refresh(bg);
     }
 
     private void doDebugSpr() {
@@ -298,7 +264,7 @@ public class GB implements ApplicationListener {
             // test hidden
 
         }
-        sprshow.refresh(spr);
+        // sprshow.refresh(spr);
     }
     double[] tmp = new double[256];
     Complex[] sig = new Complex[256];
@@ -340,8 +306,8 @@ public class GB implements ApplicationListener {
             }
         }
 
-        waveform.refresh(wave);
-        fftdisp.refresh(fftdata);
+        //waveform.refresh(wave); //TODO : update to new
+        // fftdisp.refresh(fftdata);
     }
 
 //    private void doKernelDisplay() {
@@ -414,119 +380,80 @@ public class GB implements ApplicationListener {
 //        //System.out.println("Kernel sum:"+krnlstep+" vs stepresponse:"+stepresponse);
 //        krnldisplay.refresh2(krnl);
 //    }
-    private float clamp(float min, float max, float c) {
-        return Math.min(Math.max(min, c), max);
+    public int clock() {
+        int cycles = cpu.clock();
+        mem.clock(cycles);
+        gpu.clock(cycles);
+        apu.clock(cycles);
+        timer.clock(cycles);
+        spriteDma.clock(cycles);
+        return cycles;
     }
 
-    @Override
-    public void render() {
-        Gdx.gl.glClearColor(0.2f, 0.2f, 0.2f, 1);
-        Gdx.gl.glClear(GL10.GL_COLOR_BUFFER_BIT);
-        int cycles = 0;
-        if (!paused && hasRom) {
-            hz60accu += Gdx.graphics.getDeltaTime();
-            if (hz60accu >= hz60tick) {
-                hz60accu -= hz60tick;
 
-                double rate = Gdx.input.isKeyPressed(Keys.SPACE) ? cyclesperframe * Settings.speedup : cyclesperframe;
-
-                while (cpuacc < rate) {
-
-                    cycles = cpu.tick();
-                    mem.clock(cycles);
-                    gpu.clock(cycles);
-                    if (!Gdx.input.isKeyPressed(Keys.SPACE)) {
-                        apu.clock(cycles);
-                    }
-                    timer.clock(cycles);
-                    spriteDma.clock(cycles);
-                    cpuacc += cycles;
-                }
-
-                cpuacc -= rate;
-
-                apu.flush();
-                doDebugWaveforms();
-
-                clock++;
-                fontalpha -= 0.003f;
-
-            }
+    public void signalVblank() {
+        //its not an 1d array... this is a bug [160][144]
+        for (int i = 0; i < gpu.videobuffer.length; i++) {
+            System.arraycopy(gpu.videobuffer[i], 0, lcd[i], 0, lcd[i].length);
         }
-        //doDebugVram();
-        //doDebugSpr();
-        //doKernelDisplay();
-        map.refresh(bg);
-
-        int sprzoom = 2;
-        int h = Gdx.graphics.getHeight();
-        int w = Gdx.graphics.getWidth();
-        float fontoffset = font.getCapHeight() - font.getDescent();
-
-        batch.begin();
-
-        screen.drawStraight(batch, 0, 0, 0, 0, 160, 144, Settings.zoom, Settings.zoom, 0, 0, 0, 160, 144);
-
-        //sprshow.drawStraight(batch, 160*2 ,0, 0, 0, 64, 80, 1, 1, 0, 0, 0, 64, 80);
-        waveform.drawStraight(batch, 320 + 10, 0, 0, 0, 256, 64, 1, 1, 0, 0, 0, 256, 64);
-        fftdisp.drawStraight(batch, 320 + 10, 90, 0, 0, 256, 64 * 2, 1, 2, 0, 0, 0, 256, 64);
-        //krnldisplay.drawStraight(batch, 0,0, 0, 0, 1024, 768, 1, 1, 0, 0, 0, 1024, 768);
-        //map.drawStraight(batch, 160 * 2, 20, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
-        if (showfps) {
-            font.setColor(1f, 1f, 0, 0.5f);
-            font.draw(batch, "FPS:" + Gdx.graphics.getFramesPerSecond(), 10, h - 10);
-        }
-        if (fontalpha > 0f && romInfo) {
-            fadeoutFont.drawMultiLine(batch, mem.getRomInfo(), 50, h - 30);
-            fadeoutFont.setColor(1f, 1f, 0f, (fontalpha > 0f ? fontalpha : 0f));
-        }
-        //font.draw(batch, "Background map", w - 300, h - 300 + 256 + fontoffset);
-        //font.draw(batch, "Gameboy screen: 160x144, 2x zoom", 50, 50 + 144 * 2 + fontoffset);
-        //font.draw(batch, "Sprites", w - 300, h - 500 + 80 * sprzoom + fontoffset);
-
-        batch.end();
-        gui.draw();
     }
 
+    public void flushAudio() {
+        apu.flush();
+    }
+
+    public int[][] lcdContent() {
+        return lcd;
+    }
+
+//        Gdx.gl.glClearColor(0.2f, 0.2f, 0.2f, 1);
+//        Gdx.gl.glClear(GL10.GL_COLOR_BUFFER_BIT);
+//        int cycles = 0;
+//        if (!paused && hasRom) {
+//            hz60accu += Gdx.graphics.getDeltaTime();
+//            if (hz60accu >= hz60tick) {
+//                hz60accu -= hz60tick;
+//
+//                double rate = Gdx.input.isKeyPressed(Keys.SPACE) ? cyclesperframe * Settings.speedup : cyclesperframe;
+//
+//                while (cpuacc < rate) {
+//
+//                    cycles = cpu.tick();
+//                    mem.clock(cycles);
+//                    gpu.clock(cycles);
+//                    if (!Gdx.input.isKeyPressed(Keys.SPACE)) {
+//                        apu.clock(cycles);
+//                    }
+//                    timer.clock(cycles);
+//                    spriteDma.clock(cycles);
+//                    cpuacc += cycles;
+//                }
+//
+//                cpuacc -= rate;
+//
+//                apu.flush();
+//                doDebugWaveforms();
+//
+//                clock++;
+//                fontalpha -= 0.003f;
+//
+//            }
+//        }
+    //doDebugVram();
+    //doDebugSpr();
+    //doKernelDisplay();
+    //sprshow.drawStraight(batch, 160*2 ,0, 0, 0, 64, 80, 1, 1, 0, 0, 0, 64, 80);
+    // waveform.drawStraight(batch, 320 + 10, 0, 0, 0, 256, 64, 1, 1, 0, 0, 0, 256, 64);
+    // fftdisp.drawStraight(batch, 320 + 10, 90, 0, 0, 256, 64 * 2, 1, 2, 0, 0, 0, 256, 64);
+    //krnldisplay.drawStraight(batch, 0,0, 0, 0, 1024, 768, 1, 1, 0, 0, 0, 1024, 768);
+    //map.drawStraight(batch, 160 * 2, 20, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
     private void timedDebug(float trigger) {
         if (clock / 60f >= trigger) {
             CPU.DEBUG_ENABLED = true;
         }
     }
 
-    public void flushScreen() {
-        screen.refresh2(gpu.videobuffer);
-    }
-
-    public void runGameboy() {
-        paused = false;
-    }
-
-    public void stopGameboy() {
-        paused = true;
-    }
-
-    @Override
-    public void pause() {
-        // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void resume() {
-        // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void dispose() {
-        // TODO Auto-generated method stub
-        font.dispose();
-        fadeoutFont.dispose();
-        screen.dispose();
-        map.dispose();
-        sprshow.dispose();
-        batch.dispose();
+    public void release() {
 
         apu.stop();
         apu.close();
@@ -535,7 +462,6 @@ public class GB implements ApplicationListener {
     }
 
     public void loadRom(String path) {
-        fontalpha = 1.0f;
         mem.loadRom(path);
         hasRom = true;
     }

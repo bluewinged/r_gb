@@ -17,8 +17,8 @@
 package ch.gb;
 
 import java.util.HashMap;
+import static org.lwjgl.glfw.GLFW.*;
 
-import com.badlogic.gdx.Input.Keys;
 
 public class Settings {
 	public static HashMap<Integer, Integer> joymap;
@@ -34,15 +34,15 @@ public class Settings {
 		// 1: left
 		// 0: right
 		joymap = new HashMap<Integer, Integer>();
-		joymap.put(Keys.RIGHT, 0);
-		joymap.put(Keys.LEFT, 1);
-		joymap.put(Keys.UP, 2);
-		joymap.put(Keys.DOWN, 3);
+		joymap.put(GLFW_KEY_RIGHT, 0);
+		joymap.put(GLFW_KEY_LEFT, 1);
+		joymap.put(GLFW_KEY_UP, 2);
+		joymap.put(GLFW_KEY_DOWN, 3);
 
-		joymap.put(Keys.S, 4);
-		joymap.put(Keys.A, 5);
-		joymap.put(Keys.SHIFT_RIGHT, 6);
-		joymap.put(Keys.ENTER, 7);
+		joymap.put(GLFW_KEY_A, 4);
+		joymap.put(GLFW_KEY_S, 5);
+		joymap.put(GLFW_KEY_BACKSPACE, 6);
+		joymap.put(GLFW_KEY_ENTER, 7);
 	}
 	public static int numChannels=1;
 	public static int samplingrate = 44100;

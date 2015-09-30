@@ -21,6 +21,7 @@ import ch.gb.GB;
 import ch.gb.GBComponents;
 import ch.gb.cpu.CPU;
 import ch.gb.mem.Memory;
+import ch.gb.utils.FreqMeter;
 import ch.gb.utils.Utils;
 
 public class GPU implements Component {
@@ -77,18 +78,18 @@ public class GPU implements Component {
     // brighter, bright, green, darkgreen
     // private final int[] palette = { 0x9BBC0FFF, 0x8BAC0FFF,
     // 0x306230FF,0x0F380FFF };//wiki
-    private final int[] palette = {0xE0f8d0ff, 0x88C070ff, 0x346856,
-        0x081820ff};//BGP
+        private final int[] palette = {0xE0f8d0ff, 0x88C070ff, 0x346856,
+        0x081820ff};//BGB
     ///private final int[] palette = {0xE8E8E8FF, 0xA0A0A0FF, 0x585858FF, 0x101010FF};// b/w
     private int lcdClock = 456;
 
-    private final GB emu;
+    private final GB gb;
     private Memory mem;
 
     public int[][] videobuffer;
 
-    public GPU(GB emu) {
-        this.emu = emu;
+    public GPU(GB gb) {
+        this.gb = gb;
         videobuffer = new int[160][144];
     }
 
@@ -138,7 +139,7 @@ public class GPU implements Component {
             spr8x16 = (b & 4) == 4;
             sprEnable = (b & 2) == 2;
             bgEnable = (b & 1) == 1; //background becomes white
-            
+
         } else if (add == STAT) {
             stat = (byte) (b & 0x78); // clear lower 3 bits and 7 ( those are read only)
         } else if (add == SCX) {
@@ -228,7 +229,7 @@ public class GPU implements Component {
                         mem.requestInterrupt(CPU.LCD_IR);
                     }
                     mem.requestInterrupt(CPU.VBLANK_IR);
-                    emu.flushScreen();// flush data into video driver
+                    gb.signalVblank();//signal that screen is fully rendered
                 }
             } else if (lcdClock >= 456 - 80) { // counting downwards!
                 if (mode != 2) {
@@ -305,15 +306,15 @@ public class GPU implements Component {
             // fetch namtable byte
             byte tileId = mem.readByte(targetTilemap + tx / 8);
 
-            int tileloc = bgWinTiledata + (signed ? (int) tileId : tileId & 0xff) * 16;
+            int tileLoc = bgWinTiledata + (signed ? (int) tileId : tileId & 0xff) * 16;
 
             // fetch tile pattern
-            byte lo = mem.readByte(tileloc + targetTileY);
-            byte hi = mem.readByte(tileloc + targetTileY + 1);
+            byte lo = mem.readByte(tileLoc + targetTileY);
+            byte hi = mem.readByte(tileLoc + targetTileY + 1);
 
-            int intilex = tx % 8;
+            int inTileX = tx % 8;
 
-            int color = palette[bgp[(lo >> (7 - intilex) & 1) | ((hi >> (7 - intilex) & 1) << 1)]];
+            int color = palette[bgp[(lo >> (7 - inTileX) & 1) | ((hi >> (7 - inTileX) & 1) << 1)]];
             videobuffer[x][ly] = color;
         }
 
@@ -323,8 +324,8 @@ public class GPU implements Component {
         //int winInTileY = ((ly - wy) % 8) * 2;
         //int winEntry = winTilemap + (ly - wy) / 8 * 32;
 
-        int winInTileY = ((ly) % 8) * 2;
-        int winEntry = winTilemap + (ly) / 8 * 32;
+        int winInTileY = ((ly - wy) % 8) * 2;
+        int winEntry = winTilemap + (ly - wy) / 8 * 32;
         // first check wether this can be a window scanline
         if ((ly < wy) || wx >= 160) {
             return;
@@ -340,29 +341,34 @@ public class GPU implements Component {
             // fetch namtable byte
             byte tileId = mem.readByte(targetTilemap + tx / 8);
 
-            int tileloc = bgWinTiledata + (signed ? (int) tileId : tileId & 0xff) * 16;
+            int tileLoc = bgWinTiledata + (signed ? (int) tileId : tileId & 0xff) * 16;
 
             // fetch tile pattern
-            byte lo = mem.readByte(tileloc + targetTileY);
-            byte hi = mem.readByte(tileloc + targetTileY + 1);
+            byte lo = mem.readByte(tileLoc + targetTileY);
+            byte hi = mem.readByte(tileLoc + targetTileY + 1);
 
-            int intilex = tx % 8;
+            int inTileX = tx % 8;
 
-            int color = palette[bgp[(lo >> (7 - intilex) & 1) | ((hi >> (7 - intilex) & 1) << 1)]];
+            int color = palette[bgp[(lo >> (7 - inTileX) & 1) | ((hi >> (7 - inTileX) & 1) << 1)]];
             videobuffer[x][ly] = color;
         }
     }
 
     public void drawSprScanline() {
-
-        for (int i = 0; i < 40; i++) {
+        // counting backwards ensures that $fe00 has a higher priority compared to
+        //$fe00+x //fixes a wario land bug which caused the 4 blocks in the start screen
+        //to be rendered incorrectly
+        
+        //TODO: order sprites according to their x coordinates and then render them
+        //from the highest x value to the lowest
+        for (int i = 39; i >= 0; i--) {
             int ypos = (mem.readByte(0xFE00 + i * 4) & 0xff) - 16;
             int xpos = (mem.readByte(0xFE00 + i * 4 + 1) & 0xff) - 8;
             int tileid = (mem.readByte(0xFE00 + i * 4 + 2) & 0xff);
             byte attr = mem.readByte(0xFE00 + i * 4 + 3);
 
             // 8x8 mode
-            int priority = (attr >> 7) & 1;// TODO: not yet implemented
+            int priority = (attr >> 7) & 1;
             int yflip = (attr >> 6) & 1;
             int xflip = (attr >> 5) & 1;
 
@@ -377,23 +383,25 @@ public class GPU implements Component {
                 int patternentry = 0x8000 + tileid * 16 + line * 2;
                 byte lo = mem.readByte(patternentry);
                 byte hi = mem.readByte(patternentry + 1);
-
+                
+                //draw the 8x1 pixels
                 for (int x = 0; x < 8; x++) {
 
                     int newx = (xflip == 1 ? x : 7 - x);
                     int tx = xpos + x;
-                    // TODO:wrong since only consider bg[0], not assigned color
+                    
                     if (tx < 0 || tx >= 160) {
                         continue;
                     }
-
-                    if (priority == 1 && videobuffer[tx][ly] != palette[bgp[0]]) {
+                    //TODO: there is still a priority bug, see wario land when wario enters a pipe
+                    //TODO: display max 10 sprites per scanline
+                    if (priority == 1&& videobuffer[tx][ly] != palette[bgp[0]] ) {
                         continue;
                     }
 
-                    int index = (lo >> (newx)) & 1 | ((hi >> (newx)) & 1) << 1;
-                    int palcolor = obp[pal][index];
-                    if (index != 0)// spr 3colors
+                    int color = (lo >> (newx)) & 1 | ((hi >> (newx)) & 1) << 1;
+                    int palcolor = obp[pal][color];
+                    if (color != 0)// sprite transparency
                     {
                         videobuffer[tx][ly] = palette[palcolor];
                     }
