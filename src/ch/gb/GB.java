@@ -262,7 +262,7 @@ public class GB implements ApplicationListener {
     private void doDebugVram() {
         for (int y = 0; y < 256 / 8; y++) {
             for (int x = 0; x < 32; x++) {
-                int mapentry = 0x9800 + y * 32 + x;
+                int mapentry = 0x9C00 + y * 32 + x;
                 byte tileid = mem.readByte(mapentry);
                 for (int i = 0; i < 8; i++) {
                     int[] data = gpu.get8bg(i, tileid, 0);
@@ -435,7 +435,9 @@ public class GB implements ApplicationListener {
                     cycles = cpu.tick();
                     mem.clock(cycles);
                     gpu.clock(cycles);
-                    if(!Gdx.input.isKeyPressed(Keys.SPACE)) apu.clock(cycles);
+                    if (!Gdx.input.isKeyPressed(Keys.SPACE)) {
+                        apu.clock(cycles);
+                    }
                     timer.clock(cycles);
                     spriteDma.clock(cycles);
                     cpuacc += cycles;
@@ -454,7 +456,7 @@ public class GB implements ApplicationListener {
         //doDebugVram();
         //doDebugSpr();
         //doKernelDisplay();
-        //map.refresh(bg);
+        map.refresh(bg);
 
         int sprzoom = 2;
         int h = Gdx.graphics.getHeight();
@@ -464,11 +466,12 @@ public class GB implements ApplicationListener {
         batch.begin();
 
         screen.drawStraight(batch, 0, 0, 0, 0, 160, 144, Settings.zoom, Settings.zoom, 0, 0, 0, 160, 144);
-        //map.drawStraight(batch, 160*2, 80, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
+
         //sprshow.drawStraight(batch, 160*2 ,0, 0, 0, 64, 80, 1, 1, 0, 0, 0, 64, 80);
         waveform.drawStraight(batch, 320 + 10, 0, 0, 0, 256, 64, 1, 1, 0, 0, 0, 256, 64);
         fftdisp.drawStraight(batch, 320 + 10, 90, 0, 0, 256, 64 * 2, 1, 2, 0, 0, 0, 256, 64);
         //krnldisplay.drawStraight(batch, 0,0, 0, 0, 1024, 768, 1, 1, 0, 0, 0, 1024, 768);
+        //map.drawStraight(batch, 160 * 2, 20, 0, 0, 256, 256, 1, 1, 0, 0, 0, 256, 256);
         if (showfps) {
             font.setColor(1f, 1f, 0, 0.5f);
             font.draw(batch, "FPS:" + Gdx.graphics.getFramesPerSecond(), 10, h - 10);

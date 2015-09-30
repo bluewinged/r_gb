@@ -77,8 +77,8 @@ public class GPU implements Component {
     // brighter, bright, green, darkgreen
     // private final int[] palette = { 0x9BBC0FFF, 0x8BAC0FFF,
     // 0x306230FF,0x0F380FFF };//wiki
-    private final int[] palette = { 0xE0f8d0ff, 0x88C070ff, 0x346856,
-     0x081820ff };//BGP
+    private final int[] palette = {0xE0f8d0ff, 0x88C070ff, 0x346856,
+        0x081820ff};//BGP
     ///private final int[] palette = {0xE8E8E8FF, 0xA0A0A0FF, 0x585858FF, 0x101010FF};// b/w
     private int lcdClock = 456;
 
@@ -134,13 +134,13 @@ public class GPU implements Component {
 
             bgWinTiledata = (b & 0x10) == 0x10 ? 0x8000 : 0x9000;// patterns (0 is unsigned addressing)
 
-            bgTilemap = (b & 8) == 8 ? 0x9C000 : 0x9800;// nametable
+            bgTilemap = (b & 8) == 8 ? 0x9C00 : 0x9800;// nametable //one 0 to much caused the whole bug...
             spr8x16 = (b & 4) == 4;
             sprEnable = (b & 2) == 2;
             bgEnable = (b & 1) == 1; //background becomes white
+            
         } else if (add == STAT) {
             stat = (byte) (b & 0x78); // clear lower 3 bits and 7 ( those are read only)
-
         } else if (add == SCX) {
             scx = b & 0xff;
         } else if (add == SCY) {
@@ -221,7 +221,7 @@ public class GPU implements Component {
             // mode 3: 172 cycles
             //complete screen refresh 70224 = 144 * 456 + 4560
 
-            if (ly >= 144) {
+            if (ly >= 144) { //ly = 144 ... 153
                 if (mode != 1) {
                     mode = 1;//VBLANK 
                     if ((stat & 0x10) == 0x10) {
@@ -233,7 +233,6 @@ public class GPU implements Component {
             } else if (lcdClock >= 456 - 80) { // counting downwards!
                 if (mode != 2) {
                     mode = 2; //Searching OAM
-
                     if ((stat & 0x20) == 0x20) {
                         mem.requestInterrupt(CPU.LCD_IR); //TODO: check
                     }
@@ -269,21 +268,21 @@ public class GPU implements Component {
         if (lcdClock <= 0) {
             lcdClock = 456 + lcdClock; // adjust if taken too many
             ly++;
-
-            // coincidence flag
-            coincidence = 0;
-            if (ly == lyc && (stat & 0x40) == 0x40) {
-                mem.requestInterrupt(CPU.LCD_IR);
-                coincidence = 1;
-            }
-
-            // VBlank?
-            if (ly == 144) { //TODO: this gets spammed?
-
-            }
             if (ly > 153) {
                 ly = 0;
             }
+            scanlineCompare();
+        }
+    }
+
+    public void scanlineCompare() {
+        if (ly == lyc) {
+            coincidence = 1;
+            if ((stat & 0x40) == 0x40) {
+                mem.requestInterrupt(CPU.LCD_IR);
+            }
+        } else {
+            coincidence = 0;
         }
     }
 
@@ -321,9 +320,11 @@ public class GPU implements Component {
     }
 
     public void drawWinScanline() {
-        int winInTileY = ((ly - wy) % 8) * 2;
+        //int winInTileY = ((ly - wy) % 8) * 2;
+        //int winEntry = winTilemap + (ly - wy) / 8 * 32;
 
-        int winEntry = winTilemap + (ly - wy) / 8 * 32;
+        int winInTileY = ((ly) % 8) * 2;
+        int winEntry = winTilemap + (ly) / 8 * 32;
         // first check wether this can be a window scanline
         if ((ly < wy) || wx >= 160) {
             return;
