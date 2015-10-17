@@ -18,7 +18,7 @@ package ch.gb.io;
 
 import ch.gb.Component;
 import ch.gb.GBComponents;
-import ch.gb.Settings;
+import ch.gb.Config;
 import ch.gb.cpu.CPU;
 import ch.gb.mem.Memory;
 
@@ -78,10 +78,10 @@ public class Joypad implements IOport, IJoypad, Component {
     // 1 = not pressed
     @Override
     public boolean keyDown(int keycode) {
-        if (Settings.joymap.containsKey(keycode)) {
+        if (Config.joymap.containsKey(keycode)) {
             mem.requestInterrupt(CPU.JOYPAD_IR);
             // clear corresponding bit
-            int key = Settings.joymap.get(keycode);
+            int key = Config.joymap.get(keycode);
             joy8 &= ~(1 << key);
 
             if (key > 3 && (selection & 0x20) == 0) { // = buttons
@@ -96,9 +96,9 @@ public class Joypad implements IOport, IJoypad, Component {
 
     @Override
     public boolean keyUp(int keycode) {
-        if (Settings.joymap.containsKey(keycode)) {
+        if (Config.joymap.containsKey(keycode)) {
             // set corresponding bit
-            joy8 |= (1 << Settings.joymap.get(keycode));
+            joy8 |= (1 << Config.joymap.get(keycode));
 
             // System.out.println(Utils.dumpHex(joy8));
         }

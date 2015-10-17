@@ -20,7 +20,7 @@ import java.util.HashMap;
 import static org.lwjgl.glfw.GLFW.*;
 
 
-public class Settings {
+public class Config {
 	public static HashMap<Integer, Integer> joymap;
 	public static String root = "savegames/";
 	static {
@@ -51,6 +51,8 @@ public class Settings {
 	public static int ch2enable = 1;
 	public static int ch3enable = 1;
 	public static int ch4enable = 1;
+        
+        public static int gbType=1; //1 = DMG, 2 = CGB
 	
 	public static int speedup = 10;
 	public static int zoom = 2;

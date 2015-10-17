@@ -23,7 +23,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.regex.Pattern;
 
-import ch.gb.Settings;
+import ch.gb.Config;
 import ch.gb.utils.RessourceLoader;
 import ch.gb.utils.Utils;
 
@@ -137,7 +137,7 @@ public class MBC1 extends Mapper {
         //InputStream is = filehandle.read();
         InputStream is = null;
         try {
-            is = RessourceLoader.load(Settings.root + File.separatorChar + filename);
+            is = RessourceLoader.load(Config.root + File.separatorChar + filename);
         } catch (FileNotFoundException e1) {
             System.out.println("No savegame found");
             return;
@@ -172,7 +172,7 @@ public class MBC1 extends Mapper {
             //OutputStream os = filehandle.write(false);
             OutputStream os = null;
             try {
-                os = RessourceLoader.write(Settings.root + File.separatorChar + filename);
+                os = RessourceLoader.write(Config.root + File.separatorChar + filename);
             } catch (FileNotFoundException e1) {
                 System.err.println("Couldnt save Ram");
                 return;

@@ -145,7 +145,7 @@ public class OGLrenderer {
     private void init() {
         //init Gameboy
         gb = new GB();
-        gb.loadRom("roms/Legend of Zelda, The - Link's Awakening (USA, Europe).gb");
+        gb.loadRom("roms/Big Scroller Demo (PD).gb");
         //gb.loadRom("roms/Pokemon - Red Version (USA, Europe).gb");
 
         //init GLFW

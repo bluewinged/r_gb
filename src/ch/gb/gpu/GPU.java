@@ -21,7 +21,6 @@ import ch.gb.GB;
 import ch.gb.GBComponents;
 import ch.gb.cpu.CPU;
 import ch.gb.mem.Memory;
-import ch.gb.utils.FreqMeter;
 import ch.gb.utils.Utils;
 
 public class GPU implements Component {
@@ -87,6 +86,7 @@ public class GPU implements Component {
     private Memory mem;
 
     public int[][] videobuffer;
+    private boolean masterPriority;
 
     public GPU(GB gb) {
         this.gb = gb;
@@ -138,7 +138,8 @@ public class GPU implements Component {
             bgTilemap = (b & 8) == 8 ? 0x9C00 : 0x9800;// nametable //one 0 to much caused the whole bug...
             spr8x16 = (b & 4) == 4;
             sprEnable = (b & 2) == 2;
-            bgEnable = (b & 1) == 1; //background becomes white
+            bgEnable = (b & 1) == 1; //dmg background becomes white
+            masterPriority = (b & 1) ==1; //TODO: cgb bg and window master priority
 
         } else if (add == STAT) {
             stat = (byte) (b & 0x78); // clear lower 3 bits and 7 ( those are read only)

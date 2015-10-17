@@ -17,6 +17,7 @@
 package ch.gb.cpu;
 
 import ch.gb.Component;
+import ch.gb.Config;
 import ch.gb.GBComponents;
 import ch.gb.io.Timer;
 import ch.gb.mem.Memory;
@@ -141,7 +142,7 @@ public class CPU implements Component {
         ime = true;
         pc = 0x100;
         sp = 0xFFFE;
-        wr16reg(RG_AF, 0x01B0);// for GBC its 0x11B0
+        wr16reg(RG_AF, (Config.gbType == 2 ? 0x11B0 : 0x01B0));// for GBC its 0x11B0
         wr16reg(RG_BC, 0x0013);
         wr16reg(RG_DE, 0x00D8);
         wr16reg(RG_HL, 0x014D);

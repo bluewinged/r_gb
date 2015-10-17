@@ -24,7 +24,7 @@ import java.util.HashMap;
 
 import ch.gb.Component;
 import ch.gb.GBComponents;
-import ch.gb.Settings;
+import ch.gb.Config;
 import static java.lang.Math.*;
 
 public class APU implements Component {
@@ -314,14 +314,14 @@ public class APU implements Component {
             System.out.println("weird");
         }
         //System.out.println(""+(le>>1&1)+" yoo:"+ (re>>1&1));
-        q1 *= Settings.ch1enable;
-        q2 *= Settings.ch2enable;
-        w *= Settings.ch3enable;
-        n *= Settings.ch4enable;
+        q1 *= Config.ch1enable;
+        q2 *= Config.ch2enable;
+        w *= Config.ch3enable;
+        n *= Config.ch4enable;
         //each channel can output between 0 and 15
         float chanL = (q1 * (le & 1) + q2 * (le >> 1 & 1) + w * (le >> 2 & 1) + n * (le >> 3 & 1)) / 4 * (powercontrol.leftvol + 1) / 8;
         float chanR = (q1 * (re & 1) + q2 * (re >> 1 & 1) + w * (re >> 2 & 1) + n * (re >> 3 & 1)) / 4 * (powercontrol.rightvol + 1) / 8;
-        float mixed = (chanL + chanR) / 2 * Settings.mastervolume;//TODO: remove master volume, its a terrible idea
+        float mixed = (chanL + chanR) / 2 * Config.mastervolume;//TODO: remove master volume, its a terrible idea
 
         //System.out.println(mixed);
         accumcycles = 0;
