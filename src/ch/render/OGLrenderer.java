@@ -1,7 +1,18 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+/* 
+ * Copyright (C) 2017 bluew
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 package ch.render;
 
@@ -14,7 +25,7 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import org.lwjgl.BufferUtils;
-import static org.lwjgl.glfw.Callbacks.errorCallbackPrint;
+import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.GLFW_CONTEXT_VERSION_MAJOR;
 import static org.lwjgl.glfw.GLFW.GLFW_CONTEXT_VERSION_MINOR;
 import static org.lwjgl.glfw.GLFW.GLFW_OPENGL_CORE_PROFILE;
@@ -127,30 +138,31 @@ public class OGLrenderer {
     }
 
     public void run() {
-        //try {
             init();
             loop();
-            glfwDestroyWindow(window);
-            keyCallback.release();
-       // }finally {
-            //clean up and exit
+            
+            //terminate window and callbacks
+            glfwFreeCallbacks(window);
+	    glfwDestroyWindow(window);
+            
+            // terminate glfw
             glfwTerminate();
-            errorCallback.release();
+            glfwSetErrorCallback(null).free();
+
             prog.release();
             glTexture.release();
             gb.release();
-       // }
     }
 
     private void init() {
         //init Gameboy
         gb = new GB();
-        gb.loadRom("roms/Big Scroller Demo (PD).gb");
+        //gb.loadRom("roms/Big Scroller Demo (PD).gb");
         //gb.loadRom("roms/Pokemon - Red Version (USA, Europe).gb");
-
+        gb.loadRom("roms/Legend of Zelda, The - Link's Awakening (USA, Europe).gb");
         //init GLFW
-        glfwSetErrorCallback(errorCallback = errorCallbackPrint(System.err));
-        if (glfwInit() != GL11.GL_TRUE) {
+        GLFWErrorCallback.createPrint(System.err).set();
+        if (!glfwInit()) {
             throw new IllegalStateException("Unable initialize GLFW");
         }
 
@@ -190,7 +202,7 @@ public class OGLrenderer {
 
     public void loop() {
 
-        while (glfwWindowShouldClose(window) != GL_TRUE) {
+        while (!glfwWindowShouldClose(window)) {
             //process events
             glfwPollEvents();
 
