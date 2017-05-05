@@ -390,7 +390,6 @@ public final class GB {
         return cycles;
     }
 
-
     public void signalVblank() {
         //its not an 1d array... this is a bug [160][144]
         for (int i = 0; i < gpu.videobuffer.length; i++) {

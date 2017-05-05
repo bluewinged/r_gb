@@ -30,9 +30,9 @@ import java.util.logging.Logger;
 
 /**
  * Mixture between 8080 and z80
- * 
- * 
- * @author bluew 
+ *
+ * @author bluew
+ *
  */
 public class CPU implements Component {
 

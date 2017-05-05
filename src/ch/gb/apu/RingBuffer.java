@@ -20,7 +20,7 @@ import java.util.Arrays;
 
 /**
  *
- * @author bluew 
+ * @author bluew
  */
 public class RingBuffer {
 

@@ -20,9 +20,9 @@ import java.util.Arrays;
 
 /**
  * Memory bank controller handles bankswitching to extend addressable memory
- * 
- * @author bluew 
- * 
+ *
+ * @author bluew
+ *
  */
 public abstract class Mapper {
 
