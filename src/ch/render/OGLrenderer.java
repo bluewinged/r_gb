@@ -84,6 +84,26 @@ public class OGLrenderer {
     private final double cyclesperframe = (CPU.CLOCK / framerate);
     private double lastTime = 0;
     private int zoom = 1;
+    private String vertexshader
+            = "#version 150\n"
+            + "in vec3 vert;\n"
+            + "in vec2 vertTexCoord;\n"
+            + "out vec2 fragTexCoord;\n"
+            + "void main() {\n"
+            + "    fragTexCoord = vertTexCoord;\n"
+            + "    gl_Position = vec4(vert, 1);\n"
+            + "}";
+    private String fragmentshader = ""
+            + "#version 150\n"
+            + "uniform sampler2D tex;\n"
+            + "in vec2 fragTexCoord;\n"
+            + "out vec4 finalColor;\n"
+            + "\n"
+            + "void main() {\n"
+            + "    finalColor = texture(tex, fragTexCoord);\n"
+            + "    //set every drawn pixel to white\n"
+            + "    //finalColor = vec4(1.0, 1.0, 1.0, 1.0);\n"
+            + "}";
 
     public OGLrenderer(GB gb, int zoom) {
         this.gb = gb;
@@ -91,8 +111,10 @@ public class OGLrenderer {
     }
 
     private void loadShaders() {
-        GLShader vert = new GLShader(fileToString("resources/vert02.txt"), GL_VERTEX_SHADER);
-        GLShader frag = new GLShader(fileToString("resources/frag02.txt"), GL_FRAGMENT_SHADER);
+        //GLShader vert = new GLShader(fileToString("resources/vert02.txt"), GL_VERTEX_SHADER);
+        GLShader vert = new GLShader(vertexshader, GL_VERTEX_SHADER);
+        //GLShader frag = new GLShader(fileToString("resources/frag02.txt"), GL_FRAGMENT_SHADER);
+        GLShader frag = new GLShader(fragmentshader, GL_FRAGMENT_SHADER);
         ArrayList<GLShader> shaders = new ArrayList();
         shaders.add(vert);
         shaders.add(frag);
