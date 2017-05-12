@@ -1,4 +1,4 @@
-# r_gb
+# r_gb [![Build Status](https://travis-ci.org/bluewww/r_gb.svg?branch=master)](https://travis-ci.org/bluewww/r_gb)
 A gameboy color emulator. 
 
 ## Dependencies
