@@ -83,6 +83,12 @@ public class OGLrenderer {
     private double cpuacc;
     private final double cyclesperframe = (CPU.CLOCK / framerate);
     private double lastTime = 0;
+    private int zoom = 1;
+
+    public OGLrenderer(GB gb, int zoom) {
+        this.gb = gb;
+        this.zoom = zoom;
+    }
 
     private void loadShaders() {
         GLShader vert = new GLShader(fileToString("resources/vert02.txt"), GL_VERTEX_SHADER);
@@ -138,28 +144,24 @@ public class OGLrenderer {
     }
 
     public void run() {
-            init();
-            loop();
-            
-            //terminate window and callbacks
-            glfwFreeCallbacks(window);
-	    glfwDestroyWindow(window);
-            
-            // terminate glfw
-            glfwTerminate();
-            glfwSetErrorCallback(null).free();
+        init();
+        loop();
 
-            prog.release();
-            glTexture.release();
-            gb.release();
+        //terminate window and callbacks
+        glfwFreeCallbacks(window);
+        glfwDestroyWindow(window);
+
+        // terminate glfw
+        glfwTerminate();
+        glfwSetErrorCallback(null).free();
+
+        prog.release();
+        glTexture.release();
+        gb.release();
     }
 
     private void init() {
-        //init Gameboy
-        gb = new GB();
-        //gb.loadRom("roms/Big Scroller Demo (PD).gb");
-        //gb.loadRom("roms/Pokemon - Red Version (USA, Europe).gb");
-        gb.loadRom("roms/links_awakening.gb");
+
         //init GLFW
         GLFWErrorCallback.createPrint(System.err).set();
         if (!glfwInit()) {
@@ -172,7 +174,7 @@ public class OGLrenderer {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
         glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-        window = glfwCreateWindow(160 * 2, 144 * 2, "R_GB Gameboy Color Emulator", NULL, NULL);
+        window = glfwCreateWindow(160 * zoom, 144 * zoom, "R_GB Gameboy Color Emulator", NULL, NULL);
         if (window == NULL) {
             throw new RuntimeException("glfwCreateWindow failed. OpenGL 3.2 supported?");
         }
