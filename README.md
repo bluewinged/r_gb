@@ -13,5 +13,6 @@ to build
 
 ## CLI
 -f path to the rom which should be used
+
 -z an integer from one upwards to indicate the zoom level/scale factor
 
